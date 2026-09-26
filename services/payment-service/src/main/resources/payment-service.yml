@@ -1,0 +1,47 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/payment_db
+    username: ${DB_USER:brewslot}
+    password: ${DB_PASSWORD:brewslot}
+  flyway:
+    locations: classpath:db/messaging,classpath:db/migration/payment
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      acks: all
+    consumer:
+      auto-offset-reset: earliest
+    listener:
+      ack-mode: record
+      # 파티션 수(3)만큼 소비 스레드. 같은 파티션은 한 스레드만 처리하므로 주문 단위 순서는 유지된다.
+      concurrency: 3
+      observation-enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+brewslot:
+  payment:
+    recovery-poll-ms: 5000
+    unresolved-grace: 10s
+  fake-pg:
+    fee-bps: 220
+    latency-ms: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  datadog:
+    metrics:
+      export:
+        enabled: ${DATADOG_ENABLED:false}
+        api-key: ${DD_API_KEY:none}
+  metrics:
+    tags:
+      service: payment-service
