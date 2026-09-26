@@ -22,6 +22,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Lint · Unit · Integration(Testcontainers) · 실행계획 회귀 · API 드리프트 · E2E
         run: ./gradlew build --console=plain
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 공개 데모(site/) 스케줄러 ↔ 서버 스케줄러 결과 일치 검증 (테스트 벡터 500개)
+        run: node site/verify.mjs services/order-service/build/scheduler-vectors.json
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
