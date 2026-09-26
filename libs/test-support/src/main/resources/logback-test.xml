@@ -1,0 +1,10 @@
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    <root level="WARN">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+    <logger name="com.brewslot" level="INFO"/>
+    <logger name="org.apache.kafka" level="ERROR"/>
+    <logger name="org.springframework.kafka" level="ERROR"/>
+</configuration>
