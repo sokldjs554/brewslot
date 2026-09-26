@@ -1,0 +1,17 @@
+{
+  "name": "member-orders-offset",
+  "sql": "SELECT order_id FROM member_order_view WHERE member_id = 424242 ORDER BY placed_at DESC OFFSET 20000 LIMIT 20",
+  "plan": [{
+    "Plan": {
+      "Node Type": "Limit", "Plan Rows": 20, "Actual Rows": 20, "Actual Loops": 1,
+      "Plans": [{
+        "Node Type": "Sort", "Sort Method": "external merge  Disk: 5120kB", "Plan Rows": 20020, "Actual Rows": 20020, "Actual Loops": 1,
+        "Plans": [{
+          "Node Type": "Bitmap Heap Scan", "Relation Name": "member_order_view", "Plan Rows": 95000, "Actual Rows": 100000, "Actual Loops": 1,
+          "Plans": [{"Node Type": "Bitmap Index Scan", "Index Name": "exp1_member", "Plan Rows": 95000, "Actual Rows": 100000, "Actual Loops": 1}]
+        }]
+      }]
+    },
+    "Execution Time": 51.5
+  }]
+}

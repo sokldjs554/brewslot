@@ -1,0 +1,17 @@
+{
+  "name": "outbox-poll-without-partial-index",
+  "sql": "SELECT id FROM outbox_event WHERE published_at IS NULL ORDER BY id LIMIT 200",
+  "plan": [{
+    "Plan": {
+      "Node Type": "Limit", "Plan Rows": 200, "Actual Rows": 150, "Actual Loops": 1,
+      "Plans": [{
+        "Node Type": "Sort", "Sort Method": "quicksort", "Plan Rows": 200, "Actual Rows": 150, "Actual Loops": 1,
+        "Plans": [{
+          "Node Type": "Seq Scan", "Relation Name": "outbox_event", "Plan Rows": 1, "Actual Rows": 150, "Actual Loops": 1,
+          "Filter": "(published_at IS NULL)", "Rows Removed by Filter": 2000000
+        }]
+      }]
+    },
+    "Execution Time": 140.945
+  }]
+}

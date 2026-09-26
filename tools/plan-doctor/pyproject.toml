@@ -1,0 +1,15 @@
+[project]
+name = "plan-doctor"
+version = "0.1.0"
+description = "PostgreSQL EXPLAIN (FORMAT JSON) 진단 도구 — 규칙 기반 검사 + Claude 리뷰(선택)"
+requires-python = ">=3.10"
+dependencies = ["anthropic>=1.8"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+plan-doctor = "plan_doctor.cli:main"
+
+[tool.setuptools]
+packages = ["plan_doctor"]
