@@ -57,7 +57,9 @@ class SchedulerVectorExportTest {
                 "result" to when (result) {
                     is ScheduleResult.Feasible -> mapOf(
                         "feasible" to true,
-                        "allocations" to result.plan.allocations.map { mapOf("station" to it.station.name, "slot" to it.slotStart.epochSecond, "units" to it.units) },
+                        "allocations" to result.plan.allocations.map { a ->
+                            mapOf("station" to a.station.name, "slot" to a.slotStart.epochSecond, "units" to a.units)
+                        },
                     )
                     is ScheduleResult.Infeasible -> mapOf("feasible" to false, "bottleneck" to result.bottleneck.name, "reason" to result.reason.name)
                 },
