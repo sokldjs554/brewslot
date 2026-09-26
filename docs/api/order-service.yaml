@@ -1,0 +1,404 @@
+openapi: 3.0.3
+info:
+  title: BrewSlot Order Service API
+  version: v1
+  description: |
+    픽업 약속 기반 카페 주문 API. **설계 우선(API-first)** 으로 작성된 명세이며,
+    `OpenApiDriftTest` 가 구현(springdoc 생성 명세)과 이 문서의 경로·메서드·필수 헤더가 일치하는지 CI 에서 검증한다.
+
+    ## 공통 규칙
+    - 인증은 API Gateway 에서 처리하며, 게이트웨이가 `X-Member-Id` 헤더를 주입한다.
+    - 오류 응답은 모두 [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `application/problem+json`.
+      클라이언트는 `detail` 문구가 아니라 `type` 으로 분기한다 (아래 Problem Types 참고).
+    - 생성 요청(`POST /orders`, `POST /orders/{orderId}/reorders`)은 `Idempotency-Key` 가 필수다.
+      같은 키 재요청 → 최초 결과를 `200` + `Idempotent-Replayed: true` 로 반환, 같은 키로 다른 내용 → `422`.
+    - 시각은 모두 ISO-8601 UTC(`2026-10-01T23:30:00Z`). 픽업 시각은 매장 슬롯(기본 5분) 경계여야 한다.
+    - 결제는 비동기다: `POST /orders/{orderId}/payment` → `202 Accepted` + `Location`. 결과는 주문 조회로 확인한다.
+
+    ## Problem Types (`https://brewslot.dev/problems/{type}`)
+    | type | status | 의미 |
+    |---|---|---|
+    | pickup-slot-unavailable | 409 | 제조 용량 부족. `alternatives` 에 가능한 가장 가까운 시각(최대 3개) |
+    | pickup-time-not-aligned | 400 | 슬롯 경계가 아닌 픽업 시각 |
+    | pickup-time-out-of-range | 422 | 최소 준비시간·예약 가능 범위·영업시간 밖. `earliestPickupAt` 제공 |
+    | menu-item-unavailable / menu-item-not-found / empty-cart | 422 | 장바구니 검증 실패 |
+    | idempotency-key-reused | 422 | 같은 키로 다른 내용 요청 |
+    | order-hold-expired / order-not-payable | 409 | 결제할 수 없는 주문 상태 |
+    | illegal-order-transition | 409 | 허용되지 않은 상태 전이. `currentStatus` 제공 |
+    | concurrent-modification | 409 | 낙관적 잠금 충돌 — 재조회 후 재시도 |
+    | not-found | 404 | |
+    | invalid-request | 400 | `violations` 에 필드별 오류 |
+servers:
+  - url: http://localhost:8081
+tags:
+  - name: Stores
+  - name: Orders
+  - name: Store operations
+  - name: Queries (CQRS read side)
+
+paths:
+  /stores/{storeId}:
+    get:
+      tags: [Stores]
+      summary: 매장 정보와 메뉴 (스테이션별 제조 부하·신선도 포함)
+      parameters: [{ $ref: '#/components/parameters/StoreId' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Store' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /stores/{storeId}/capacity-profile:
+    put:
+      tags: [Stores]
+      summary: 스테이션별 슬롯당 제조 용량 변경
+      description: 이미 받은 예약보다 작게 줄지 않는다 (capacity = max(reserved, 새 용량)).
+      parameters: [{ $ref: '#/components/parameters/StoreId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [unitsPerSlot]
+              properties:
+                unitsPerSlot:
+                  type: object
+                  additionalProperties: { type: integer, minimum: 0 }
+                  example: { ESPRESSO: 6, BLENDER: 3, BREW_BAR: 2 }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Store' } } } }
+
+  /stores/{storeId}/pickup-times:
+    get:
+      tags: [Stores]
+      summary: 장바구니 기준 픽업 가능 시각과 혼잡도
+      description: |
+        장바구니의 음료 구성(스테이션·부하·신선도)으로 각 후보 시각의 가능 여부를 계산한다.
+        Redis 슬롯 사용량 캐시를 읽으므로 러시아워 조회 폭주가 주문 트랜잭션과 경합하지 않는다.
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: items
+          in: query
+          required: true
+          description: '`menuItemId:quantity` 반복. 예) `items=1002:2&items=1005:1`'
+          schema: { type: array, items: { type: string, pattern: '^\d+:\d+$' } }
+          style: form
+          explode: true
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/PickupOption' } }
+
+  /stores/{storeId}/orders/{orderId}/status:
+    put:
+      tags: [Store operations]
+      summary: 매장의 주문 상태 변경
+      description: |
+        `PREPARING`(접수) → `READY`(제조 완료, 약속 준수 여부 기록) → `PICKED_UP`(전달, 적립 트리거).
+        `REJECTED` 는 결제 완료 주문을 거절하며 카드 환불·포인트 복원 명령이 자동 발행된다.
+      parameters: [{ $ref: '#/components/parameters/StoreId' }, { $ref: '#/components/parameters/OrderId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [PREPARING, READY, PICKED_UP, REJECTED] }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /stores/{storeId}/production-queue:
+    get:
+      tags: [Queries (CQRS read side)]
+      summary: 바리스타 제조 큐 (픽업 순서가 아닌 제조 슬롯 순서)
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ProductionSlot' } } } }
+
+  /stores/{storeId}/dashboard:
+    get:
+      tags: [Queries (CQRS read side)]
+      summary: 매장 일간 대시보드 (픽업 약속 준수율, 평균 지연)
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/StoreDashboard' } } } }
+
+  /orders:
+    post:
+      tags: [Orders]
+      summary: 주문 생성 (제조 슬롯 임시 점유)
+      description: |
+        백워드 스케줄링으로 음료별 제조 슬롯을 배정하고 `holdExpiresAt`(기본 5분)까지 점유한다.
+        용량이 없으면 `409 pickup-slot-unavailable` 과 대안 시각을 돌려준다.
+      parameters: [{ $ref: '#/components/parameters/MemberId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PlaceOrderRequest' } } }
+      responses:
+        '201':
+          description: 생성됨
+          headers:
+            Location: { schema: { type: string } }
+            Idempotent-Replayed: { schema: { type: boolean } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+        '200':
+          description: 같은 Idempotency-Key 재요청 — 최초 결과
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+        '409':
+          description: 제조 용량 부족
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/SlotUnavailableProblem' }
+        '422': { $ref: '#/components/responses/Problem' }
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: 주문 조회 (쓰기 모델 — 강한 일관성)
+      parameters: [{ $ref: '#/components/parameters/MemberId' }, { $ref: '#/components/parameters/OrderId' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /orders/{orderId}/payment:
+    post:
+      tags: [Orders]
+      summary: 결제 시작 (비동기 Saga)
+      description: 포인트 차감 → 카드 결제 → 주문 확정. 재요청은 멱등.
+      parameters: [{ $ref: '#/components/parameters/MemberId' }, { $ref: '#/components/parameters/OrderId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cardToken: { type: string, description: PG 결제수단 토큰. 포인트 전액 결제 시 생략 가능, example: tok_visa }
+      responses:
+        '202':
+          description: 결제 진행 중
+          headers: { Location: { schema: { type: string } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /orders/{orderId}/cancellation:
+    post:
+      tags: [Orders]
+      summary: 주문 취소 (제조 시작 전까지). 환불은 비동기
+      parameters: [{ $ref: '#/components/parameters/MemberId' }, { $ref: '#/components/parameters/OrderId' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /orders/{orderId}/reorders:
+    post:
+      tags: [Orders]
+      summary: 지난 주문과 같은 구성으로 재주문
+      parameters:
+        - $ref: '#/components/parameters/MemberId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pickupAt]
+              properties:
+                pickupAt: { type: string, format: date-time }
+                pointsToUse: { type: integer, format: int64, minimum: 0, default: 0 }
+      responses:
+        '201': { description: 생성됨, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '200': { description: 멱등 재요청, content: { application/json: { schema: { $ref: '#/components/schemas/Order' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /members/{memberId}/orders:
+    get:
+      tags: [Queries (CQRS read side)]
+      summary: 내 주문 내역 (커서 페이지네이션, 최종적 일관성)
+      parameters:
+        - $ref: '#/components/parameters/MemberId'
+        - { name: memberId, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: cursor, in: query, schema: { type: string }, description: 직전 응답의 nextCursor }
+        - { name: size, in: query, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/OrderSummary' } }
+                  nextCursor: { type: string, nullable: true }
+
+  /members/{memberId}/reorder-suggestions:
+    get:
+      tags: [Queries (CQRS read side)]
+      summary: 원탭 재주문 추천 (품절·가격 변동·가장 빠른 픽업 시각 재검증)
+      parameters:
+        - $ref: '#/components/parameters/MemberId'
+        - { name: memberId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ReorderSuggestion' } } } }
+
+components:
+  parameters:
+    StoreId: { name: storeId, in: path, required: true, schema: { type: integer, format: int64 }, example: 101 }
+    OrderId: { name: orderId, in: path, required: true, schema: { type: string, format: uuid } }
+    MemberId: { name: X-Member-Id, in: header, required: true, schema: { type: integer, format: int64 }, description: 게이트웨이가 주입하는 회원 ID }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,100}$' }
+  responses:
+    Problem:
+      description: RFC 9457 Problem Details
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string, format: uri, example: 'https://brewslot.dev/problems/illegal-order-transition' }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+    SlotUnavailableProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            requestedPickupAt: { type: string, format: date-time }
+            bottleneckStation: { type: string, enum: [ESPRESSO, BLENDER, BREW_BAR, UNKNOWN] }
+            reason: { type: string, enum: [CAPACITY_EXHAUSTED, NO_PRODUCTION_WINDOW, EXCEEDS_SLOT_CAPACITY, CONTENTION] }
+            alternatives: { type: array, items: { type: string, format: date-time }, maxItems: 3 }
+    Store:
+      type: object
+      properties:
+        storeId: { type: integer, format: int64 }
+        brandId: { type: integer, format: int64 }
+        name: { type: string }
+        openTime: { type: string, example: '07:00:00' }
+        closeTime: { type: string }
+        slotMinutes: { type: integer }
+        unitsPerSlot: { type: object, additionalProperties: { type: integer } }
+        menu:
+          type: array
+          items:
+            type: object
+            properties:
+              menuItemId: { type: integer, format: int64 }
+              name: { type: string }
+              price: { type: integer, format: int64 }
+              station: { type: string, enum: [ESPRESSO, BLENDER, BREW_BAR] }
+              loadUnits: { type: integer, description: 한 잔이 슬롯에서 차지하는 제조 부하 }
+              freshnessMinutes: { type: integer, description: 완성 후 품질 유지 시간(이보다 일찍 만들지 않음) }
+              available: { type: boolean }
+    PickupOption:
+      type: object
+      properties:
+        pickupAt: { type: string, format: date-time }
+        feasible: { type: boolean }
+        loadPercent: { type: integer, minimum: 0, maximum: 100 }
+    PlaceOrderRequest:
+      type: object
+      required: [storeId, pickupAt, items]
+      properties:
+        storeId: { type: integer, format: int64, example: 101 }
+        pickupAt: { type: string, format: date-time }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            type: object
+            required: [menuItemId, quantity]
+            properties:
+              menuItemId: { type: integer, format: int64, example: 1002 }
+              quantity: { type: integer, minimum: 1, maximum: 20 }
+        pointsToUse: { type: integer, format: int64, minimum: 0, default: 0 }
+    Order:
+      type: object
+      properties:
+        orderId: { type: string, format: uuid }
+        status: { type: string, enum: [PENDING_PAYMENT, PAYMENT_IN_PROGRESS, PAID, PREPARING, READY, PICKED_UP, CANCELLED] }
+        storeId: { type: integer, format: int64 }
+        promisedPickupAt: { type: string, format: date-time }
+        totalAmount: { type: integer, format: int64 }
+        pointAmount: { type: integer, format: int64 }
+        cardAmount: { type: integer, format: int64 }
+        holdExpiresAt: { type: string, format: date-time, description: PENDING_PAYMENT 일 때만 }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              menuItemId: { type: integer, format: int64 }
+              name: { type: string }
+              unitPrice: { type: integer, format: int64 }
+              quantity: { type: integer }
+              amount: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        paidAt: { type: string, format: date-time }
+        readyAt: { type: string, format: date-time }
+        pickedUpAt: { type: string, format: date-time }
+        cancelledAt: { type: string, format: date-time }
+        cancelReason: { type: string, enum: [HOLD_EXPIRED, POINTS_INSUFFICIENT, PAYMENT_DECLINED, PAYMENT_TIMEOUT, CUSTOMER_CANCELLED, REJECTED_BY_STORE] }
+    OrderSummary:
+      type: object
+      properties:
+        orderId: { type: string }
+        storeId: { type: integer, format: int64 }
+        storeName: { type: string }
+        status: { type: string }
+        totalAmount: { type: integer, format: int64 }
+        promisedPickupAt: { type: string, format: date-time }
+        placedAt: { type: string, format: date-time }
+    ReorderSuggestion:
+      type: object
+      properties:
+        sourceOrderId: { type: string }
+        storeId: { type: integer, format: int64 }
+        storeName: { type: string }
+        currentTotalAmount: { type: integer, format: int64 }
+        lastOrderedTotalAmount: { type: integer, format: int64 }
+        orderable: { type: boolean }
+        unavailableItems: { type: array, items: { type: string } }
+        earliestPickupAt: { type: string, format: date-time, nullable: true }
+    ProductionSlot:
+      type: object
+      properties:
+        station: { type: string }
+        slotStart: { type: string, format: date-time }
+        reservedUnits: { type: integer }
+        capacity: { type: integer }
+        orders: { type: array, items: { type: string } }
+    StoreDashboard:
+      type: object
+      properties:
+        storeId: { type: integer, format: int64 }
+        businessDate: { type: string, format: date }
+        paidOrders: { type: integer }
+        grossAmount: { type: integer, format: int64 }
+        cancelledOrders: { type: integer }
+        readyOrders: { type: integer }
+        promiseKeptRate: { type: number, nullable: true, description: 약속한 픽업 시각까지 준비 완료된 비율 }
+        averageLatenessSeconds: { type: number, nullable: true }
+        pickedUpOrders: { type: integer }
