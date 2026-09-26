@@ -69,13 +69,16 @@ class JdbcCheckoutSagaRepository(private val jdbc: JdbcClient) {
         )
     }.optional().orElse(null)
 
-    fun lockTimedOut(now: Instant, limit: Int): List<UUID> = jdbc.sql(
+    /**
+     * 타임아웃 후보 (잠그지 않음). 잠금은 처리 시 "주문 행 → Saga 행" 순서로만 잡는다.
+     * 여기서 Saga 행을 먼저 잠그면, 주문 행을 먼저 잠그는 응답 처리와 잠금 순서가 엇갈려 교착상태가 생길 수 있다.
+     */
+    fun findTimedOut(now: Instant, limit: Int): List<UUID> = jdbc.sql(
         """
         SELECT order_id FROM checkout_saga
         WHERE status = 'RUNNING' AND deadline_at <= :now
         ORDER BY deadline_at
         LIMIT :limit
-        FOR UPDATE SKIP LOCKED
         """.trimIndent(),
     ).param("now", Timestamp.from(now)).param("limit", limit).query(UUID::class.java).list()
 }
