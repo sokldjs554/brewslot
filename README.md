@@ -247,6 +247,9 @@ done
 # 3) Swagger UI: http://localhost:8081/swagger-ui.html · 설계 명세: docs/api/order-service.yaml
 ```
 
+**▶ 데모:** 서비스를 띄운 뒤 `./scripts/demo.sh` — 12개 장면(주문·Saga·쏠림·보상·PG 유실 복구·정산·대사)을 설명과 함께 실행한다.
+실제 실행 결과: [docs/demo.md](docs/demo.md)
+
 <details>
 <summary><b>curl 로 전체 흐름 따라가기</b></summary>
 
