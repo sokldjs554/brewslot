@@ -1,5 +1,7 @@
 server:
   port: 8084
+  # Codespaces·리버스 프록시 뒤에서도 Swagger 의 서버 주소가 외부 URL 로 생성되도록 X-Forwarded-* 를 신뢰
+  forward-headers-strategy: framework
 
 spring:
   application:
@@ -44,3 +46,7 @@ brewslot:
     pg-fee-bps: 220
     platform-fee-bps: 100
     payment-service-url: ${PAYMENT_SERVICE_URL:http://localhost:8082}
+
+springdoc:
+  swagger-ui:
+    use-root-path: true   # "/" 로 접속하면 Swagger UI 로 이동

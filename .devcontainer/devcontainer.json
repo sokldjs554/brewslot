@@ -1,0 +1,22 @@
+{
+  "name": "BrewSlot",
+  "image": "mcr.microsoft.com/devcontainers/java:1-21-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" }
+  },
+  "hostRequirements": { "cpus": 4, "memory": "16gb" },
+  "postCreateCommand": "sudo apt-get update -qq && sudo apt-get install -y -qq jq >/dev/null && ./gradlew bootJar -q --console=plain",
+  "postStartCommand": "./scripts/start-all.sh",
+  "forwardPorts": [8081, 8082, 8083, 8084],
+  "portsAttributes": {
+    "8081": { "label": "Order API · Swagger", "onAutoForward": "openBrowser" },
+    "8082": { "label": "Payment API", "onAutoForward": "silent" },
+    "8083": { "label": "Loyalty API", "onAutoForward": "silent" },
+    "8084": { "label": "Settlement API", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["docs/try-it.md"] },
+    "vscode": { "extensions": ["fwcd.kotlin", "humao.rest-client"] }
+  }
+}

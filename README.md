@@ -6,6 +6,16 @@
 > "8시 50분에 받을게요" — 고객이 **고른 시각**에 음료가 **정확히** 준비되도록,
 > 매장의 실제 제조 능력(스테이션별 부하 × 음료 신선도)으로 주문을 받고, 결제·포인트·정산까지 돈이 한 원도 틀어지지 않게 흘려보내는 MSA 백엔드.
 
+### ▶ 바로 실행해 보기 — 설치 없이 브라우저에서
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/sokldjs554/brewslot?quickstart=1)
+
+버튼을 누르면 클라우드 개발환경에서 **서비스 4개 + PostgreSQL · Kafka · Redis 가 자동으로 기동**되고 Swagger UI 가 열립니다 (첫 실행 3~5분).
+터미널에서 `./scripts/demo.sh` 를 실행하면 12개 장면(주문 · Saga · 인기 시각 쏠림 · 보상 · PG 응답 유실 복구 · 정산 · 대사)이 설명과 함께 재현됩니다.
+→ [5분 체험 가이드](docs/try-it.md) · [데모 실행 결과](docs/demo.md)
+
+<img src="docs/images/swagger-order.png" alt="Order Service Swagger UI" width="720">
+
 <br>
 
 ## 한눈에 보기
