@@ -1,0 +1,71 @@
+package com.brewslot.settlement.application
+
+import com.brewslot.common.BusinessTime
+import com.brewslot.messaging.EnvelopeCodec
+import com.brewslot.messaging.EventEnvelope
+import com.brewslot.messaging.Topics
+import com.brewslot.messaging.contract.PaymentCaptured
+import com.brewslot.messaging.contract.PaymentRefunded
+import com.brewslot.messaging.contract.PointsRedeemed
+import com.brewslot.messaging.contract.PointsRedemptionReversed
+import com.brewslot.settlement.domain.EntryKind
+import com.brewslot.settlement.domain.SettlementCalculator
+import org.springframework.jdbc.core.simple.JdbcClient
+import org.springframework.kafka.annotation.KafkaListener
+import org.springframework.stereotype.Component
+import java.sql.Timestamp
+import java.time.Instant
+import java.util.UUID
+
+/**
+ * 돈이 움직였다는 "사실" 이벤트만 정산 원천으로 적재한다(주문 상태 이벤트가 아니라).
+ * 이벤트 ID 유니크 제약이 자연스러운 멱등 키가 되므로 별도 Inbox 가 필요 없다.
+ */
+@Component
+class SettlementIngestor(
+    private val codec: EnvelopeCodec,
+    private val jdbc: JdbcClient,
+    private val props: SettlementProperties,
+) {
+    @KafkaListener(topics = [Topics.PAYMENT_EVENTS, Topics.LOYALTY_EVENTS], groupId = "settlement-service")
+    fun on(message: String) = ingest(codec.decode(message))
+
+    fun ingest(envelope: EventEnvelope) {
+        when (envelope.eventType) {
+            PaymentCaptured::class.simpleName -> codec.payloadOf<PaymentCaptured>(envelope).let {
+                insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.CARD_SALE, it.amount, it.pgTransactionId, it.capturedAt)
+            }
+            PaymentRefunded::class.simpleName -> codec.payloadOf<PaymentRefunded>(envelope).let {
+                insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.CARD_REFUND, -it.amount, it.pgTransactionId, it.refundedAt)
+            }
+            PointsRedeemed::class.simpleName -> codec.payloadOf<PointsRedeemed>(envelope).let {
+                insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.POINT_SALE, it.amount, null, it.redeemedAt)
+            }
+            PointsRedemptionReversed::class.simpleName -> codec.payloadOf<PointsRedemptionReversed>(envelope).let {
+                insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.POINT_REVERSAL, -it.amount, null, it.reversedAt)
+            }
+        }
+    }
+
+    private fun insert(eventId: UUID, storeId: Long, brandId: Long, orderId: String, kind: EntryKind, amount: Long, pgTxId: String?, at: Instant) {
+        val fee = if (kind.isCard) SettlementCalculator.cardFee(amount, props.pgFeeBps) else 0
+        jdbc.sql(
+            """
+            INSERT INTO settlement_entry (source_event_id, store_id, brand_id, order_id, kind, amount, pg_fee, pg_transaction_id, occurred_at, business_date)
+            VALUES (:eventId, :storeId, :brandId, CAST(:orderId AS uuid), :kind, :amount, :fee, :pgTx, :at, :date)
+            ON CONFLICT (source_event_id) DO NOTHING
+            """.trimIndent(),
+        )
+            .param("eventId", eventId)
+            .param("storeId", storeId)
+            .param("brandId", brandId)
+            .param("orderId", orderId)
+            .param("kind", kind.name)
+            .param("amount", amount)
+            .param("fee", fee)
+            .param("pgTx", pgTxId)
+            .param("at", Timestamp.from(at))
+            .param("date", BusinessTime.businessDateOf(at))
+            .update()
+    }
+}

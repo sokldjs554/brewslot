@@ -1,0 +1,46 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: settlement-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/settlement_db
+    username: ${DB_USER:brewslot}
+    password: ${DB_PASSWORD:brewslot}
+  flyway:
+    locations: classpath:db/messaging,classpath:db/migration/settlement
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      acks: all
+    consumer:
+      auto-offset-reset: earliest
+    listener:
+      ack-mode: record
+      # 파티션 수(3)만큼 소비 스레드. 같은 파티션은 한 스레드만 처리하므로 주문 단위 순서는 유지된다.
+      concurrency: 3
+      observation-enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  datadog:
+    metrics:
+      export:
+        enabled: ${DATADOG_ENABLED:false}
+        api-key: ${DD_API_KEY:none}
+  metrics:
+    tags:
+      service: settlement-service
+
+brewslot:
+  settlement:
+    pg-fee-bps: 220
+    platform-fee-bps: 100
+    payment-service-url: ${PAYMENT_SERVICE_URL:http://localhost:8082}
