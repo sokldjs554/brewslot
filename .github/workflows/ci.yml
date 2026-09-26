@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Lint · Unit · Integration(Testcontainers) · 실행계획 회귀 · API 드리프트 · E2E
+        run: ./gradlew build --console=plain
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: plan-doctor (실행계획 진단 · high 발견 시 실패)
+        working-directory: tools/plan-doctor
+        run: |
+          pip install -q -e '.[dev]'
+          pytest -q
+          python -m plan_doctor.cli '../../services/*/build/query-plans/*.json' --fail-on high --out plan-report.md
+          cat plan-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/'
+      - name: Upload query plans (plan-doctor 입력)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: query-plans
+          path: '**/build/query-plans/*.json'
