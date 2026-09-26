@@ -1,0 +1,16 @@
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.idea/
+*.iml
+out/
+.DS_Store
+.env
+__pycache__/
+*.pyc
+.venv/
+tools/**/reports/
+.claude/settings.local.json
+.kotlin/
+.pytest_cache/
+*.egg-info/
