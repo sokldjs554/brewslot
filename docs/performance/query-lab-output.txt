@@ -1,0 +1,259 @@
+SET
+SET
+#### EXP1-BEFORE offset pagination (member_id index only), heavy member page 1000
+CREATE INDEX
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Limit (actual time=51.232..51.237 rows=20 loops=1)
+   Buffers: shared hit=1933 read=87
+   ->  Sort (actual time=49.386..50.423 rows=20020 loops=1)
+         Sort Key: placed_at DESC, order_id DESC
+         Sort Method: top-N heapsort  Memory: 4352kB
+         Buffers: shared hit=1933 read=87
+         ->  Bitmap Heap Scan on member_order_view (actual time=2.521..17.225 rows=100000 loops=1)
+               Recheck Cond: (member_id = 424242)
+               Heap Blocks: exact=1924
+               Buffers: shared hit=1927 read=87
+               ->  Bitmap Index Scan on exp1_member (actual time=2.263..2.264 rows=100000 loops=1)
+                     Index Cond: (member_id = 424242)
+                     Buffers: shared hit=3 read=87
+ Planning:
+   Buffers: shared hit=86 read=1
+ Planning Time: 0.623 ms
+ Execution Time: 51.501 ms
+(17 rows)
+
+#### EXP1-AFTER keyset pagination + composite index
+CREATE INDEX
+    index    | size  
+-------------+-------
+ exp1_member | 15 MB
+(1 row)
+
+DROP INDEX
+                                                                  QUERY PLAN                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=3.413..3.417 rows=20 loops=1)
+   Buffers: shared hit=4 read=125
+   InitPlan 1 (returns $0,$1)
+     ->  Limit (actual time=3.370..3.371 rows=1 loops=1)
+           Buffers: shared hit=1 read=124
+           ->  Index Only Scan using exp1_member_placed on member_order_view member_order_view_1 (actual time=0.032..2.528 rows=20000 loops=1)
+                 Index Cond: (member_id = 424242)
+                 Heap Fetches: 0
+                 Buffers: shared hit=1 read=124
+   ->  Index Only Scan using exp1_member_placed on member_order_view (actual time=3.411..3.413 rows=20 loops=1)
+         Index Cond: ((member_id = 424242) AND (ROW(placed_at, order_id) < ROW($0, $1)))
+         Heap Fetches: 0
+         Buffers: shared hit=4 read=125
+ Planning:
+   Buffers: shared hit=23 read=1
+ Planning Time: 0.300 ms
+ Execution Time: 3.505 ms
+(17 rows)
+
+#### EXP2-BEFORE hold-expiry scan with (status) index
+CREATE INDEX
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Limit (actual time=2.058..2.072 rows=100 loops=1)
+   Buffers: shared hit=1000 read=4
+   ->  Sort (actual time=2.056..2.062 rows=100 loops=1)
+         Sort Key: hold_expires_at
+         Sort Method: top-N heapsort  Memory: 32kB
+         Buffers: shared hit=1000 read=4
+         ->  Index Scan using exp2_status on orders (actual time=0.037..1.911 rows=1000 loops=1)
+               Index Cond: ((status)::text = 'PENDING_PAYMENT'::text)
+               Filter: (hold_expires_at <= '2026-01-01 00:00:00+00'::timestamp with time zone)
+               Buffers: shared hit=1000 read=4
+ Planning:
+   Buffers: shared hit=55 read=1
+ Planning Time: 0.423 ms
+ Execution Time: 2.109 ms
+(14 rows)
+
+#### EXP2-BEFORE-B hold-expiry scan with (status, hold_expires_at) full index
+CREATE INDEX
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.075..0.244 rows=100 loops=1)
+   Buffers: shared hit=100 read=3
+   ->  Index Scan using exp2_status_exp on orders (actual time=0.074..0.232 rows=100 loops=1)
+         Index Cond: (((status)::text = 'PENDING_PAYMENT'::text) AND (hold_expires_at <= '2026-01-01 00:00:00+00'::timestamp with time zone))
+         Buffers: shared hit=100 read=3
+ Planning:
+   Buffers: shared hit=19 read=1 dirtied=2
+ Planning Time: 0.477 ms
+ Execution Time: 0.279 ms
+(9 rows)
+
+#### EXP2-AFTER partial index WHERE status = PENDING_PAYMENT
+    index    | size  
+-------------+-------
+ exp2_status | 13 MB
+(1 row)
+
+      index      | size  
+-----------------+-------
+ exp2_status_exp | 77 MB
+(1 row)
+
+DROP INDEX
+DROP INDEX
+CREATE INDEX
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Limit (actual time=0.040..0.186 rows=100 loops=1)
+   Buffers: shared hit=100 read=2
+   ->  Index Scan using exp2_partial on orders (actual time=0.038..0.174 rows=100 loops=1)
+         Index Cond: (hold_expires_at <= '2026-01-01 00:00:00+00'::timestamp with time zone)
+         Buffers: shared hit=100 read=2
+ Planning:
+   Buffers: shared hit=17 read=1
+ Planning Time: 0.367 ms
+ Execution Time: 0.218 ms
+(9 rows)
+
+#### EXP3-BEFORE outbox poll without index on published_at
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Limit (actual time=140.881..140.901 rows=150 loops=1)
+   Buffers: shared hit=96 read=22633
+   ->  Sort (actual time=140.880..140.888 rows=150 loops=1)
+         Sort Key: id
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=96 read=22633
+         ->  Seq Scan on outbox_event (actual time=140.837..140.854 rows=150 loops=1)
+               Filter: (published_at IS NULL)
+               Rows Removed by Filter: 2000000
+               Buffers: shared hit=96 read=22633
+ Planning:
+   Buffers: shared hit=29
+ Planning Time: 0.374 ms
+ Execution Time: 140.945 ms
+(14 rows)
+
+#### EXP3-AFTER partial index (id) WHERE published_at IS NULL
+CREATE INDEX
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.027..0.057 rows=150 loops=1)
+   Buffers: shared hit=2 read=1
+   ->  Index Only Scan using exp3_unpublished on outbox_event (actual time=0.026..0.044 rows=150 loops=1)
+         Heap Fetches: 150
+         Buffers: shared hit=2 read=1
+ Planning:
+   Buffers: shared hit=16 read=1
+ Planning Time: 0.211 ms
+ Execution Time: 0.078 ms
+(9 rows)
+
+#### EXP4-BEFORE usable lots with (member_id, brand_id) index
+CREATE INDEX
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Sort (actual time=1.741..1.744 rows=30 loops=1)
+   Sort Key: expires_at, id
+   Sort Method: quicksort  Memory: 26kB
+   Buffers: shared hit=167 read=20
+   ->  Bitmap Heap Scan on point_lot (actual time=1.724..1.728 rows=30 loops=1)
+         Recheck Cond: ((member_id = 777777) AND (brand_id = 1))
+         Filter: ((remaining > 0) AND (expires_at > '2026-01-01 00:00:00+00'::timestamp with time zone))
+         Rows Removed by Filter: 19970
+         Heap Blocks: exact=167
+         Buffers: shared hit=167 read=20
+         ->  Bitmap Index Scan on exp4_member_brand (actual time=0.359..0.360 rows=20000 loops=1)
+               Index Cond: ((member_id = 777777) AND (brand_id = 1))
+               Buffers: shared read=20
+ Planning:
+   Buffers: shared hit=48 read=1 dirtied=1
+ Planning Time: 0.429 ms
+ Execution Time: 1.791 ms
+(17 rows)
+
+#### EXP4-AFTER partial index (member_id, brand_id, expires_at, id) WHERE remaining > 0
+       index       | size  
+-------------------+-------
+ exp4_member_brand | 71 MB
+(1 row)
+
+DROP INDEX
+CREATE INDEX
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort (actual time=0.045..0.047 rows=30 loops=1)
+   Sort Key: expires_at, id
+   Sort Method: quicksort  Memory: 26kB
+   Buffers: shared hit=1 read=3
+   ->  Bitmap Heap Scan on point_lot (actual time=0.030..0.033 rows=30 loops=1)
+         Recheck Cond: ((member_id = 777777) AND (brand_id = 1) AND (expires_at > '2026-01-01 00:00:00+00'::timestamp with time zone) AND (remaining > 0))
+         Heap Blocks: exact=1
+         Buffers: shared hit=1 read=3
+         ->  Bitmap Index Scan on exp4_usable (actual time=0.021..0.022 rows=30 loops=1)
+               Index Cond: ((member_id = 777777) AND (brand_id = 1) AND (expires_at > '2026-01-01 00:00:00+00'::timestamp with time zone))
+               Buffers: shared read=3
+ Planning:
+   Buffers: shared hit=27 read=1
+ Planning Time: 0.495 ms
+ Execution Time: 0.085 ms
+(15 rows)
+
+#### EXP5-BEFORE open settlement entries with (business_date) index
+CREATE INDEX
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Unique (actual time=159.795..161.046 rows=3000 loops=1)
+   Buffers: shared hit=24991
+   ->  Sort (actual time=159.792..160.249 rows=10000 loops=1)
+         Sort Key: store_id
+         Sort Method: quicksort  Memory: 385kB
+         Buffers: shared hit=24991
+         ->  Seq Scan on settlement_entry (actual time=157.544..158.555 rows=10000 loops=1)
+               Filter: ((statement_id IS NULL) AND (business_date <= '2026-12-31'::date))
+               Rows Removed by Filter: 2990000
+               Buffers: shared hit=24991
+ Planning:
+   Buffers: shared hit=60 read=4
+ Planning Time: 0.496 ms
+ Execution Time: 161.225 ms
+(14 rows)
+
+#### EXP5-AFTER partial index WHERE statement_id IS NULL
+   index   | size  
+-----------+-------
+ exp5_date | 20 MB
+(1 row)
+
+DROP INDEX
+CREATE INDEX
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ HashAggregate (actual time=3.828..4.054 rows=3000 loops=1)
+   Group Key: store_id
+   Batches: 1  Memory Usage: 241kB
+   Buffers: shared hit=9999 read=23
+   ->  Index Only Scan using exp5_open on settlement_entry (actual time=0.024..2.332 rows=10000 loops=1)
+         Index Cond: (business_date <= '2026-12-31'::date)
+         Heap Fetches: 10000
+         Buffers: shared hit=9999 read=23
+ Planning:
+   Buffers: shared hit=20 read=1
+ Planning Time: 0.333 ms
+ Execution Time: 4.289 ms
+(12 rows)
+
+#### INDEX SIZES
+      indexrelname      | pg_size_pretty 
+------------------------+----------------
+ exp1_member_placed     | 95 MB
+ exp2_partial           | 40 kB
+ exp3_unpublished       | 16 kB
+ exp4_usable            | 12 MB
+ exp5_open              | 192 kB
+ member_order_view_pkey | 76 MB
+ orders_pkey            | 76 MB
+ outbox_event_pkey      | 43 MB
+ point_lot_pkey         | 65 MB
+ settlement_entry_pkey  | 64 MB
+(10 rows)
+
