@@ -1,0 +1,63 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/order_db
+    username: ${DB_USER:brewslot}
+    password: ${DB_PASSWORD:brewslot}
+    hikari:
+      maximum-pool-size: 30
+  flyway:
+    locations: classpath:db/messaging,classpath:db/migration/order,classpath:db/seed/order
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      auto-offset-reset: earliest
+      properties:
+        max.poll.records: 100
+    listener:
+      ack-mode: record
+      # 파티션 수(3)만큼 소비 스레드. 같은 파티션은 한 스레드만 처리하므로 주문 단위 순서는 유지된다.
+      concurrency: 3
+      observation-enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+brewslot:
+  order:
+    hold-ttl: 5m
+    saga-timeout: 2m
+  outbox:
+    poll-interval-ms: 200
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  tracing:
+    sampling:
+      probability: 1.0
+  datadog:
+    metrics:
+      export:
+        enabled: ${DATADOG_ENABLED:false}
+        api-key: ${DD_API_KEY:none}
+  metrics:
+    tags:
+      service: order-service
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
