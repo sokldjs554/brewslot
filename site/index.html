@@ -1,904 +1,774 @@
-<title>BrewSlot 라이브 데모</title>
-<meta name="description" content="약속한 픽업 시간을 지키는 카페 주문 플랫폼 BrewSlot — 러시아워 비교 시뮬레이션, 고객 앱, 매장 운영, 결제·정산을 브라우저에서 바로 체험">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BrewSlot 데모</title>
+<meta name="description" content="픽업 시간을 고르면 그 시각에 맞춰 만들어 주는 카페 주문 서비스 — 고객 앱과 매장 화면 데모">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236b4226'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700'%3EB%3C/text%3E%3C/svg%3E">
 <style>
 :root {
-  --bg: #eef1f4; --surface: #ffffff; --surface-2: #f5f7f9; --ink: #18202b; --ink-2: #333d4b; --muted: #5b6676; --line: #d6dce3; --grid: #e6eaef;
-  --accent: #b8661e; --accent-ink: #ffffff; --accent-soft: #f6e7d8;
-  --espresso: #6b3f24; --blender: #c2406e; --brew: #1f7f6e; --baseline: #7b8594;
-  --ok: #1e7b45; --ok-soft: #e1f2e7; --bad: #b3261e; --bad-soft: #fbe4e2; --warn: #8a5a00; --warn-soft: #fbf0d9;
-  --display: "Unbounded", "IBM Plex Sans KR", system-ui, sans-serif;
-  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --radius: 10px;
+  --bg: #f4f1ed; --panel: #ffffff; --panel2: #faf8f6; --ink: #1f1b18; --ink2: #5a534d; --muted: #8b847d; --line: #e5dfd8;
+  --accent: #6b4226; --accent-soft: #f1e7df; --on-accent: #ffffff;
+  --good: #1d7f4a; --good-soft: #e3f3ea; --warn: #9a6200; --warn-soft: #fbf0d9; --bad: #b3261e; --bad-soft: #fbe6e4;
+  --espresso: #8a5a33; --blender: #c43d67; --brew: #1f7373;
+  --shadow: 0 1px 2px rgb(0 0 0 / .06), 0 8px 24px rgb(0 0 0 / .06);
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #11161d; --surface: #1a212b; --surface-2: #151b23; --ink: #e7ecf2; --ink-2: #c9d1db; --muted: #9aa6b5; --line: #2b3440; --grid: #232b36;
-    --accent: #e0913f; --accent-ink: #1a1208; --accent-soft: #3a2a1a;
-    --espresso: #c08a63; --blender: #e36c98; --brew: #43b8a2; --baseline: #8b96a6;
-    --ok: #4cc27f; --ok-soft: #173424; --bad: #f07167; --bad-soft: #3b1c1b; --warn: #e5b454; --warn-soft: #3a2e14;
+    --bg: #151311; --panel: #1f1c19; --panel2: #25221f; --ink: #f1ece6; --ink2: #c3bbb2; --muted: #8f877f; --line: #36312c;
+    --accent: #c8906a; --accent-soft: #3a2b21; --on-accent: #1a120c;
+    --good: #5cc98c; --good-soft: #17301f; --warn: #e2b04a; --warn-soft: #36290f; --bad: #f08a80; --bad-soft: #3a1b18;
+    --espresso: #c99366; --blender: #ee7ea0; --brew: #5fbcbc;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #11161d; --surface: #1a212b; --surface-2: #151b23; --ink: #e7ecf2; --ink-2: #c9d1db; --muted: #9aa6b5; --line: #2b3440; --grid: #232b36;
-  --accent: #e0913f; --accent-ink: #1a1208; --accent-soft: #3a2a1a;
-  --espresso: #c08a63; --blender: #e36c98; --brew: #43b8a2; --baseline: #8b96a6;
-  --ok: #4cc27f; --ok-soft: #173424; --bad: #f07167; --bad-soft: #3b1c1b; --warn: #e5b454; --warn-soft: #3a2e14;
+  --bg: #151311; --panel: #1f1c19; --panel2: #25221f; --ink: #f1ece6; --ink2: #c3bbb2; --muted: #8f877f; --line: #36312c;
+  --accent: #c8906a; --accent-soft: #3a2b21; --on-accent: #1a120c;
+  --good: #5cc98c; --good-soft: #17301f; --warn: #e2b04a; --warn-soft: #36290f; --bad: #f08a80; --bad-soft: #3a1b18;
+  --espresso: #c99366; --blender: #ee7ea0; --brew: #5fbcbc;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4); color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--body); margin: 0; }
-.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: grid; gap: 28px; }
-a { color: var(--accent); }
-h1, h2, h3 { text-wrap: balance; margin: 0; }
-h2 { font-family: var(--display); font-weight: 600; font-size: 1.2rem; letter-spacing: -0.01em; }
-h3 { font-size: 0.95rem; font-weight: 700; }
-p { margin: 0; }
-.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.muted { color: var(--muted); }
-.eyebrow { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 button { font: inherit; color: inherit; cursor: pointer; }
-button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 14px; align-content: start; }
-.cta { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 11px 16px; font-weight: 700; }
-.cta:disabled { opacity: 0.45; cursor: not-allowed; }
-.ghost { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; font-size: 0.86rem; }
-.ghost:hover { border-color: var(--accent); }
-.ghost:disabled { opacity: 0.45; cursor: not-allowed; }
-.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.note { font-size: 0.84rem; color: var(--muted); border-left: 3px solid var(--line); padding: 2px 0 2px 12px; max-width: 86ch; }
-.pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 1px 9px; font-size: 0.76rem; font-weight: 600; white-space: nowrap; }
-.pill.ok { background: var(--ok-soft); color: var(--ok); }
-.pill.bad { background: var(--bad-soft); color: var(--bad); }
-.pill.warn { background: var(--warn-soft); color: var(--warn); }
-.pill.neutral { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
+button:disabled { cursor: not-allowed; }
+.num { font-variant-numeric: tabular-nums; }
 
-/* header */
-.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.brand h1 { font-family: var(--display); font-weight: 700; font-size: clamp(1.7rem, 4vw, 2.4rem); letter-spacing: -0.03em; }
-.brand h1 b { color: var(--accent); font-weight: 700; }
-.lede { font-size: 1.08rem; max-width: 64ch; }
-.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 820px) { .summary { grid-template-columns: 1fr; } }
-.summary .panel { gap: 6px; }
-.summary .k { font-family: var(--display); font-size: 0.8rem; font-weight: 600; color: var(--accent); letter-spacing: 0.02em; }
-.summary p { font-size: 0.92rem; }
-.links { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: 0.82rem; text-decoration: none; color: var(--ink); }
-a.chip:hover { border-color: var(--accent); }
-.chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+/* ── top bar ── */
+.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; }
+.brand .logo { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 15px; }
+.brand small { font-weight: 500; color: var(--muted); font-size: 13px; }
+.tag { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.clock { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.clock .time { font-size: 22px; font-weight: 800; letter-spacing: .5px; min-width: 96px; text-align: right; }
+.clock .lbl { color: var(--muted); font-size: 12px; }
+.ctl { display: flex; gap: 4px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.ctl button { border: 0; background: transparent; padding: 5px 10px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--ink2); }
+.ctl button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+.ghost { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 6px 12px; font-size: 13px; font-weight: 600; }
+.switch-view { display: none; }
 
-/* tabs */
-.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--line); }
-.tabs button { border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: 0.92rem; white-space: nowrap; color: var(--muted); }
-.tabs button[aria-selected="true"] { background: var(--surface); border-color: var(--line); color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
-.tabpanel { display: grid; gap: 18px; }
-.lead { display: grid; gap: 4px; }
-.lead p { color: var(--muted); max-width: 80ch; }
+/* ── layout ── */
+.stage { display: grid; grid-template-columns: 390px minmax(0, 1fr); gap: 24px; padding: 20px; max-width: 1480px; margin: 0 auto; align-items: start; }
+.col-title { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .4px; margin: 0 0 8px 4px; }
 
-/* overview */
-.ov { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: start; }
-@media (max-width: 900px) { .ov { grid-template-columns: 1fr; } }
-.chart svg { width: 100%; height: auto; display: block; }
-.chart text { font-family: var(--body); fill: var(--muted); font-size: 11px; }
-.chart .lbl { fill: var(--ink-2); font-size: 12px; font-weight: 600; }
-.chart .lbl-accent { fill: var(--ink); font-size: 12.5px; font-weight: 700; }
-.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.8rem; color: var(--muted); }
-.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
-.versus { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.vs { border-radius: 8px; padding: 12px; display: grid; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); }
-.vs.win { border-color: var(--accent); background: var(--accent-soft); }
-.vs .name { font-size: 0.8rem; font-weight: 700; }
-.vs .big { font-family: var(--display); font-size: 1.7rem; font-weight: 600; letter-spacing: -0.02em; }
-.vs .sub { font-size: 0.8rem; color: var(--muted); }
-.kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 0.86rem; }
-.kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); text-align: right; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; background: var(--surface); padding: 6px 11px; font-size: 0.84rem; border-right: 1px solid var(--line); }
-.seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--accent-soft); font-weight: 700; }
-.lanes { display: grid; gap: 14px; }
-.lane h3 { margin-bottom: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* ── phone ── */
+.phone { position: sticky; top: 76px; width: 100%; height: min(780px, calc(100vh - 110px)); min-height: 560px; border-radius: 36px; background: var(--panel); border: 10px solid #111; box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column; }
+.ph-status { display: flex; justify-content: space-between; padding: 8px 20px 4px; font-size: 12px; font-weight: 700; }
+.ph-head { padding: 6px 16px 10px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; min-height: 52px; }
+.ph-head .back { border: 0; background: transparent; font-size: 24px; padding: 0 4px 0 0; line-height: 1; }
+.ph-head h2 { margin: 0; font-size: 17px; }
+.ph-head .sub { font-size: 12px; color: var(--muted); }
+.ph-head .pts { margin-left: auto; font-size: 12px; font-weight: 700; background: var(--accent-soft); color: var(--accent); padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.ph-body { flex: 1; overflow-y: auto; padding: 14px 16px 16px; position: relative; }
+.ph-nav { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); background: var(--panel); }
+.ph-nav button { border: 0; background: transparent; padding: 9px 0 12px; font-size: 12px; font-weight: 600; color: var(--muted); position: relative; }
+.ph-nav button[aria-current="page"] { color: var(--accent); }
+.ph-nav .ico { display: block; font-size: 18px; line-height: 1.2; }
+.ph-nav .dot { position: absolute; top: 6px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+.cartbar { position: sticky; bottom: -16px; margin: 18px -16px -16px; padding: 14px 12px 12px; background: linear-gradient(to bottom, transparent, var(--panel) 30%); }
+.primary { width: 100%; border: 0; border-radius: 14px; background: var(--accent); color: var(--on-accent); padding: 14px 16px; font-size: 15px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow); }
+.primary:disabled { opacity: .45; }
+.secondary { width: 100%; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 12px 16px; font-size: 14px; font-weight: 600; }
+.banner { border-radius: 12px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+.banner.bad { background: var(--bad-soft); color: var(--bad); }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: var(--panel); padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--ink2); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.banner .chip { border-color: currentColor; color: inherit; background: var(--panel); }
+.menu-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.menu-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.thumb { width: 52px; height: 52px; border-radius: 14px; flex: none; display: grid; place-items: center; font-size: 24px; background: var(--panel2); border: 1px solid var(--line); }
+.menu-item .nm { font-weight: 700; }
+.menu-item .pr { color: var(--ink2); font-size: 13px; font-weight: 600; }
+.menu-item .desc { color: var(--muted); font-size: 12px; }
+.menu-item .grow { flex: 1; min-width: 0; }
+.menu-item.out { opacity: .45; }
+.add { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 6px 12px; font-weight: 700; font-size: 13px; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; flex: none; }
+.stepper button { border: 0; background: var(--panel2); width: 30px; height: 30px; font-size: 16px; font-weight: 700; }
+.stepper span { min-width: 28px; text-align: center; font-weight: 700; }
+.section-h { font-size: 15px; font-weight: 800; margin: 18px 0 8px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.section-h small { font-weight: 500; color: var(--muted); font-size: 12px; }
+.slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.slot { border: 1.5px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 4px; text-align: center; }
+.slot b { display: block; font-size: 15px; }
+.slot span { font-size: 11px; font-weight: 700; }
+.slot .lv-ok { color: var(--good); } .slot .lv-mid { color: var(--warn); } .slot .lv-busy { color: var(--bad); }
+.slot:disabled { background: var(--panel2); color: var(--muted); border-style: dashed; }
+.slot:disabled span { color: var(--muted); }
+.slot[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.line-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.line-row .grow { flex: 1; }
+.kv { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 14px; }
+.kv.total { font-weight: 800; font-size: 16px; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+.kv .m { color: var(--muted); }
+.card-opt { display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; background: var(--panel); width: 100%; text-align: left; }
+.card-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.card-opt .cc { width: 36px; height: 24px; border-radius: 5px; background: linear-gradient(135deg, #3b3b58, #6b6b8c); flex: none; }
+.card-opt .cc.red { background: linear-gradient(135deg, #7a2d2d, #b35b5b); }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); width: 100%; text-align: left; font-weight: 600; }
+.sw { width: 40px; height: 24px; border-radius: 999px; background: var(--line); position: relative; flex: none; transition: background .15s; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgb(0 0 0 / .3); }
+[aria-checked="true"] .sw { background: var(--good); }
+[aria-checked="true"] .sw::after { left: 19px; }
+.hold { text-align: center; padding: 14px; border-radius: 14px; background: var(--accent-soft); margin-bottom: 14px; }
+.hold .cd { font-size: 26px; font-weight: 800; }
+.hold .t { font-size: 13px; color: var(--ink2); }
+.bignum { text-align: center; padding: 14px 0 6px; }
+.bignum .no { font-size: 40px; font-weight: 900; letter-spacing: 1px; }
+.bignum .msg { font-size: 16px; font-weight: 700; margin-top: 4px; }
+.bignum .msg2 { font-size: 13px; color: var(--muted); }
+.track { list-style: none; margin: 18px 0; padding: 0; }
+.track li { display: flex; gap: 12px; padding: 0 0 16px; position: relative; }
+.track li::before { content: ""; position: absolute; left: 9px; top: 20px; bottom: 0; width: 2px; background: var(--line); }
+.track li:last-child::before { display: none; }
+.track li.done::before { background: var(--accent); }
+.track .b { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel); flex: none; display: grid; place-items: center; font-size: 11px; color: var(--on-accent); }
+.track li.done .b { background: var(--accent); border-color: var(--accent); }
+.track li.now .b { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.track .tt { font-weight: 700; }
+.track .ts { font-size: 12px; color: var(--muted); }
+.order-card { display: block; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--panel); margin-bottom: 10px; }
+.order-card .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--panel2); color: var(--ink2); border: 1px solid var(--line); white-space: nowrap; }
+.pill.good { background: var(--good-soft); color: var(--good); border-color: transparent; }
+.pill.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.pill.bad { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.pill.acc { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.toast { position: sticky; top: -2px; z-index: 5; margin: -4px 0 12px; background: var(--ink); color: var(--panel); border-radius: 14px; padding: 12px 14px; font-weight: 600; box-shadow: var(--shadow); display: flex; gap: 10px; align-items: center; animation: drop .25s ease-out; }
+.toast button { margin-left: auto; border: 0; background: transparent; color: inherit; font-weight: 700; text-decoration: underline; white-space: nowrap; }
+@keyframes drop { from { transform: translateY(-10px); opacity: 0; } }
+.empty { text-align: center; color: var(--muted); padding: 40px 10px; }
+.mebox { border-radius: 16px; padding: 16px; background: var(--accent); color: var(--on-accent); margin-bottom: 14px; }
+.mebox .p { font-size: 26px; font-weight: 800; }
 
-/* customer app */
-.app { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 18px; align-items: start; }
-@media (max-width: 900px) { .app { grid-template-columns: 1fr; } }
-.phone { background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 14px 14px 18px; display: grid; gap: 12px; box-shadow: 0 1px 0 var(--line); }
-.phone .bar { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); padding: 0 6px; }
-.screen { display: grid; gap: 10px; }
-.menu { display: grid; gap: 6px; }
-.item { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); }
-.item .name { font-weight: 600; font-size: 0.9rem; }
-.item .meta { font-size: 0.74rem; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.st { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 0.7rem; }
-.st i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
-.qty { display: inline-flex; align-items: center; gap: 6px; }
-.qty button { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); line-height: 1; }
-.qty span { min-width: 1.4em; text-align: center; font-family: var(--mono); font-weight: 600; }
-.times { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.time { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 0 4px; display: grid; gap: 1px; justify-items: center; }
-.time .t { font-family: var(--mono); font-weight: 600; font-size: 0.84rem; }
-.time .l { font-size: 0.66rem; color: var(--muted); }
-.time.no { opacity: 0.5; }
-.time.no .t { text-decoration: line-through; }
-.time.sel { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
-.time.busy .l { color: var(--warn); }
-.total { display: flex; justify-content: space-between; font-size: 0.9rem; }
-.result { border-radius: 8px; padding: 10px 12px; font-size: 0.86rem; display: grid; gap: 6px; }
-.result.ok { background: var(--ok-soft); } .result.bad { background: var(--bad-soft); }
-.result .code { font-family: var(--mono); font-weight: 600; }
-.result.ok .code { color: var(--ok); } .result.bad .code { color: var(--bad); }
-.alts { display: flex; flex-wrap: wrap; gap: 6px; }
-.alts button { border: 1px solid var(--bad); background: var(--surface); border-radius: 999px; padding: 2px 10px; font-family: var(--mono); font-size: 0.82rem; }
-.tracker { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.tracker li { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; font-size: 0.86rem; color: var(--muted); }
-.tracker li::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line); justify-self: center; }
-.tracker li.done { color: var(--ink); } .tracker li.done::before { background: var(--ok); border-color: var(--ok); }
-.tracker li.now { color: var(--ink); font-weight: 700; } .tracker li.now::before { border-color: var(--accent); background: var(--accent-soft); }
-.tracker li.fail { color: var(--bad); font-weight: 700; } .tracker li.fail::before { background: var(--bad); border-color: var(--bad); }
-.tracker .at { font-family: var(--mono); font-size: 0.76rem; }
-.opts { display: grid; gap: 6px; font-size: 0.86rem; }
-.opts label { display: flex; gap: 8px; align-items: center; }
-.clock { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.clock .now { font-family: var(--display); font-size: 1.3rem; font-weight: 600; letter-spacing: -0.02em; }
+/* ── store console ── */
+.console { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); min-width: 0; }
+.con-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.con-head h2 { margin: 0; font-size: 16px; }
+.tabs { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
+.tabs button { border: 0; background: transparent; padding: 7px 12px; border-radius: 9px; font-weight: 700; color: var(--muted); font-size: 13px; }
+.tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.kpi { padding: 12px 18px; border-right: 1px solid var(--line); }
+.kpi:last-child { border-right: 0; }
+.kpi .l { font-size: 12px; color: var(--muted); font-weight: 600; }
+.kpi .v { font-size: 22px; font-weight: 800; }
+.kpi .v small { font-size: 13px; color: var(--muted); font-weight: 600; }
+.con-body { padding: 16px 18px 20px; }
+.bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.hint { color: var(--muted); font-size: 12px; }
+.kds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.lane { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 10px; min-height: 360px; min-width: 0; }
+.lane h3 { margin: 0 0 8px; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.lane h3 i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.lane h3 .c { margin-left: auto; color: var(--muted); font-weight: 600; }
+.lane .grp { font-size: 11px; font-weight: 700; color: var(--muted); margin: 10px 2px 6px; }
+.lane .none { font-size: 12px; color: var(--muted); margin: 0 2px 6px; }
+.tk { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; padding: 8px 9px; margin-bottom: 7px; }
+.tk.now { border-left-color: var(--accent); }
+.tk.late { border-left-color: var(--bad); background: var(--bad-soft); }
+.tk.mine { outline: 2px solid var(--accent); outline-offset: -1px; }
+.tk .h { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.tk .no { font-weight: 800; font-size: 15px; }
+.tk .pk { font-size: 12px; color: var(--ink2); }
+.tk ul { margin: 4px 0 6px; padding: 0; list-style: none; font-size: 13px; }
+.tk .act { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.tk .act small { color: var(--muted); font-size: 11px; }
+.tk.late .act small { color: var(--bad); font-weight: 700; }
+.done-btn { border: 0; border-radius: 8px; background: var(--good); color: #fff; font-weight: 700; padding: 5px 10px; font-size: 12px; }
+.handoff { border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 700; padding: 5px 10px; font-size: 12px; }
+.tbl-wrap { overflow: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 700; background: var(--panel2); position: sticky; top: 0; }
+td.r, th.r { text-align: right; }
+.grid-cap td, .grid-cap th { padding: 6px; text-align: center; }
+.cell { border-radius: 8px; padding: 6px 4px; font-size: 12px; font-weight: 700; position: relative; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); min-width: 54px; }
+.cell .fill { position: absolute; left: 0; bottom: 0; top: 0; opacity: .25; }
+.cell span { position: relative; }
+.cell.full { border-color: var(--bad); color: var(--bad); }
+.cur { background: var(--accent-soft); }
+.cap-ctl { display: inline-flex; align-items: center; gap: 6px; }
+.cap-ctl button { width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font-weight: 800; }
+.st-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.sum-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.sum { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--panel2); }
+.sum .l { font-size: 12px; color: var(--muted); font-weight: 600; }
+.sum .v { font-size: 18px; font-weight: 800; }
+.sum.hl { background: var(--accent-soft); border-color: transparent; }
+.log { max-height: 180px; overflow-y: auto; font-size: 12px; color: var(--ink2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--panel2); margin-top: 14px; }
+.log div { padding: 2px 0; }
+.log b { color: var(--ink); font-variant-numeric: tabular-nums; margin-right: 6px; }
+footer { text-align: center; color: var(--muted); font-size: 12px; padding: 4px 16px 24px; }
+footer a { color: inherit; }
 
-/* board */
-.board-wrap { overflow-x: auto; }
-.board { display: grid; grid-template-columns: 92px repeat(14, minmax(40px, 1fr)); gap: 4px; min-width: 700px; }
-.board .h { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); text-align: center; }
-.board .h.cur { color: var(--accent); font-weight: 700; }
-.board .rowlabel { display: grid; align-content: center; gap: 1px; font-size: 0.78rem; font-weight: 600; }
-.board .rowlabel small { font-family: var(--mono); font-weight: 400; color: var(--muted); font-size: 0.7rem; }
-.cell { position: relative; height: 54px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
-.cell .fill { position: absolute; inset: auto 0 0 0; height: 0; opacity: 0.85; transition: height 0.35s ease; }
-.cell .n { position: absolute; inset: auto 0 3px 0; text-align: center; font-family: var(--mono); font-size: 0.68rem; font-weight: 600; color: var(--ink); }
-.cell.full .n { color: #fff; }
-.cell.none { background: repeating-linear-gradient(135deg, var(--surface-2) 0 6px, var(--line) 6px 7px); }
-.cell.past { opacity: 0.4; }
-.cell.win { box-shadow: inset 0 0 0 2px var(--accent); }
-.cell.new { animation: flash 1.2s ease; }
-@keyframes flash { 0% { box-shadow: inset 0 0 0 3px var(--accent); } 100% { box-shadow: inset 0 0 0 0 transparent; } }
-
-/* store */
-.store { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
-@media (max-width: 900px) { .store { grid-template-columns: 1fr; } }
-.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.kpi { background: var(--surface-2); border-radius: 8px; padding: 10px; display: grid; gap: 0; }
-.kpi b { font-family: var(--mono); font-size: 1.35rem; line-height: 1.25; }
-.kpi span { font-size: 0.74rem; color: var(--muted); }
-.slider { display: grid; grid-template-columns: 110px 1fr 52px; gap: 10px; align-items: center; font-size: 0.88rem; }
-.slider input { width: 100%; accent-color: var(--accent); }
-.queue { display: grid; gap: 8px; }
-.qslot { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; }
-.qslot.cur { border-color: var(--accent); background: var(--accent-soft); }
-.qslot .qh { display: flex; justify-content: space-between; gap: 8px; font-size: 0.82rem; font-weight: 700; }
-.qslot ul { margin: 0; padding-left: 18px; font-size: 0.84rem; }
-.orders { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
-.orders th, .orders td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); }
-.orders th { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
-.tblwrap { overflow-x: auto; }
-
-/* saga & money */
-.saga { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 260px); gap: 18px; align-items: start; }
-@media (max-width: 800px) { .saga { grid-template-columns: 1fr; } }
-.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.step { display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: baseline; padding: 7px 10px; border-radius: 8px; background: var(--surface-2); }
-.step .who { font-family: var(--mono); font-size: 0.7rem; font-weight: 600; text-align: center; border-radius: 4px; padding: 1px 4px; color: #fff; }
-.who.order { background: #3b5b8c; } .who.loyalty { background: #7a4fa0; } .who.payment { background: #2f6f5e; } .who.pg { background: #6b6f76; }
-.step .msg { font-size: 0.87rem; }
-.step .ev { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
-.step.bad .msg { color: var(--bad); font-weight: 600; } .step.good .msg { color: var(--ok); font-weight: 600; } .step.warn .msg { color: var(--warn); font-weight: 600; }
-.state { display: grid; gap: 8px; }
-.state div { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font-size: 0.85rem; }
-.state b { font-family: var(--mono); }
-.money { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
-@media (max-width: 900px) { .money { grid-template-columns: 1fr; } }
-.stmt { display: grid; gap: 4px; font-size: 0.9rem; }
-.stmt div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
-.stmt div:last-child { border-bottom: 0; font-weight: 700; font-size: 1rem; }
-.stmt b { font-family: var(--mono); font-weight: 600; }
-
-/* proof */
-.proof { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 800px) { .proof { grid-template-columns: 1fr; } }
-.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 4px; }
-.stat .big { font-family: var(--display); font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; }
-.stat .big small { font-family: var(--mono); font-size: 0.85rem; color: var(--muted); font-weight: 500; }
-.stat p { font-size: 0.84rem; color: var(--muted); }
-.tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-@media (max-width: 800px) { .tables { grid-template-columns: 1fr; } }
-.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 12px 10px; }
-table { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
-.tbl th, .tbl td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
-.tbl th { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
-td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tbl tr:last-child td { border-bottom: 0; }
-caption { text-align: left; font-weight: 700; padding: 8px 6px 4px; font-size: 0.9rem; }
-.arch { overflow-x: auto; }
-.arch svg { min-width: 640px; width: 100%; height: auto; display: block; }
-.arch text { font-family: var(--body); font-size: 12px; fill: var(--ink); }
-.arch .sub { fill: var(--muted); font-size: 10.5px; font-family: var(--mono); }
-footer { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
-@media (prefers-reduced-motion: reduce) { .cell .fill { transition: none; } .cell.new { animation: none; } }
+@media (max-width: 1180px) {
+  .kds { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpi:nth-child(3) { border-right: 0; }
+  .kpi:nth-child(n+4) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 900px) {
+  .top { padding: 10px 16px; gap: 10px; }
+  .clock { margin-left: 0; width: 100%; }
+  .clock .time { min-width: 0; font-size: 20px; }
+  .switch-view { display: flex; width: 100%; }
+  .switch-view button { flex: 1; }
+  .stage { grid-template-columns: minmax(0, 1fr); padding: 12px 16px; }
+  body[data-view="customer"] #storeCol, body[data-view="store"] #phoneCol { display: none; }
+  .phone { position: relative; top: 0; height: 720px; border-width: 6px; border-radius: 26px; }
+  .sum-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kds { grid-template-columns: minmax(0, 1fr); }
+  .lane { min-height: 0; }
+  .col-title { display: none; }
+  .kpi { padding: 10px 12px; }
+  .kpi .v { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } .sw, .sw::after { transition: none; } }
 </style>
+</head>
+<body data-view="customer">
 
-<div class="wrap">
-  <header style="display:grid;gap:14px">
-    <div class="brand"><h1>Brew<b>Slot</b></h1><span class="eyebrow">카페 주문 플랫폼 · 라이브 데모</span></div>
-    <p class="lede">출근 러시에 "8시 50분에 받을게요" 주문이 몰려도, <b>매장이 실제로 만들 수 있을 때만</b> 주문을 받아 약속한 시각에 음료를 내놓는 백엔드입니다.</p>
-    <div class="summary">
-      <div class="panel"><span class="k">문제</span><p>흔한 스마트오더는 "5분당 주문 N건" 으로 받습니다. 아메리카노 1잔과 스무디 3잔을 같은 1건으로 봐서, 러시아워엔 약속한 시각에 음료가 안 나옵니다.</p></div>
-      <div class="panel"><span class="k">해결</span><p>메뉴마다 <b>제조 스테이션 · 부하 · 신선도</b>를 두고, 픽업 시각에서 거꾸로 제조 슬롯을 배정합니다. 못 지킬 시각이면 거절 대신 가장 가까운 가능 시각을 제안합니다.</p></div>
-      <div class="panel"><span class="k">증명</span><p>같은 손님 흐름에서 <b>약속 준수 100%</b>를 지키면서 더 많은 주문을 받습니다(아래 그래프). 결제 · 포인트 · 정산까지 Kafka 기반 MSA 로 구현했습니다.</p></div>
+<header class="top">
+  <div class="brand"><span class="logo">B</span>BrewSlot <small>성수역점</small><span class="tag">DEMO</span></div>
+  <div class="clock">
+    <span class="lbl">매장 시각</span>
+    <span class="time num" id="clock">08:30:00</span>
+    <div class="ctl" role="group" aria-label="시간 흐름">
+      <button id="btnPlay" aria-pressed="true" aria-label="일시정지">⏸</button>
+      <button data-speed="1" aria-pressed="false">1배</button>
+      <button data-speed="10" aria-pressed="true">10배</button>
+      <button data-speed="60" aria-pressed="false">60배</button>
     </div>
-    <div class="links">
-      <a class="chip" href="https://github.com/sokldjs554/brewslot">GitHub 소스 코드 ↗</a>
-      <a class="chip" href="https://codespaces.new/sokldjs554/brewslot?quickstart=1">실제 서버로 실행 (Codespaces) ↗</a>
-      <span class="chip"><span class="dot"></span>페이지의 스케줄러 = 서버 코드와 결과 500/500 일치 (CI 검증)</span>
-    </div>
-  </header>
+    <button class="ghost" id="btnSkip">+5분</button>
+    <button class="ghost" id="btnReset">처음부터</button>
+  </div>
+  <div class="ctl switch-view" role="group" aria-label="화면 전환">
+    <button data-view="customer" aria-pressed="true">📱 고객 앱</button>
+    <button data-view="store" aria-pressed="false">🏪 매장 화면</button>
+  </div>
+</header>
 
-  <nav class="tabs" role="tablist" aria-label="데모 구역">
-    <button role="tab" id="tab-rush" aria-controls="p-rush" aria-selected="true">① 러시아워 비교</button>
-    <button role="tab" id="tab-app" aria-controls="p-app" aria-selected="false">② 고객 앱으로 주문</button>
-    <button role="tab" id="tab-store" aria-controls="p-store" aria-selected="false">③ 매장 운영</button>
-    <button role="tab" id="tab-money" aria-controls="p-money" aria-selected="false">④ 결제 · 정산</button>
-    <button role="tab" id="tab-tech" aria-controls="p-tech" aria-selected="false">⑤ 기술 · 성능</button>
-  </nav>
-
-  <!-- ① 러시아워 비교 -->
-  <section class="tabpanel" id="p-rush" role="tabpanel" aria-labelledby="tab-rush">
-    <div class="lead">
-      <h2>같은 러시아워, 두 가지 주문 받는 방식</h2>
-      <p>손님 <span id="nLabel">120</span>명이 07:10~09:00 사이에 주문합니다(원하는 픽업은 08:30~08:55에 몰림). 흔한 "5분당 N건 제한" 방식과 BrewSlot 이 같은 손님을 받았을 때의 결과입니다.</p>
-    </div>
-    <div class="ov">
-      <div class="panel chart">
-        <div class="row" style="justify-content:space-between">
-          <h3>받은 주문 수 vs 약속한 시각에 음료가 나온 비율</h3>
-          <div class="row">
-            <div class="seg" id="nSeg" role="group" aria-label="손님 수">
-              <button data-n="80" aria-pressed="false">80명</button><button data-n="120" aria-pressed="true">120명</button><button data-n="160" aria-pressed="false">160명</button>
-            </div>
-            <button class="ghost" id="reseed">다른 날로 다시</button>
-          </div>
-        </div>
-        <div id="scatter"></div>
-        <div class="legend">
-          <span><i style="background:var(--baseline);border-radius:50%"></i>건수 제한 방식 (숫자 = 5분당 받는 주문 수)</span>
-          <span><i style="background:var(--accent);transform:rotate(45deg) scale(.85)"></i>BrewSlot</span>
-        </div>
-      </div>
-      <div class="panel">
-        <h3 id="vsTitle">BrewSlot 만큼 주문을 받으려면?</h3>
-        <div class="versus">
-          <div class="vs"><span class="name" id="vsNaiveName">5분당 4건 제한</span><span class="big" id="vsNaiveRate">63%</span><span class="sub">약속 준수율</span></div>
-          <div class="vs win"><span class="name">BrewSlot</span><span class="big" id="vsBrewRate">100%</span><span class="sub">약속 준수율</span></div>
-        </div>
-        <dl class="kv" id="vsKv"></dl>
-        <p class="note" id="vsNote"></p>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="row" style="justify-content:space-between">
-        <h3>픽업 시각별 주문 — 제시간 / 늦음</h3>
-        <div class="row"><span class="mono muted" id="replayClock">하루 전체</span><button class="ghost" id="replay">▶ 하루 재생</button></div>
-      </div>
-      <div class="lanes chart">
-        <div class="lane"><h3><span id="laneNaiveName">건수 제한</span><span class="pill bad" id="laneNaivePill"></span></h3><div id="laneNaive"></div></div>
-        <div class="lane"><h3>BrewSlot<span class="pill ok" id="laneBrewPill"></span></h3><div id="laneBrew"></div></div>
-      </div>
-      <div class="legend"><span><i style="background:var(--ok)"></i>제시간에 준비</span><span><i style="background:var(--bad)"></i>약속보다 늦음</span></div>
-      <p class="note">모델 가정: 매장 용량은 에스프레소 6 · 블렌더 3 · 브루바 2 (5분당 부하). 바리스타는 픽업이 이른 음료부터, 신선도 창보다 일찍은 만들지 않습니다.
-        원하는 시각이 차 있으면 손님은 15분 이내의 제안 시각만 받아들이고, 아니면 이탈합니다. BrewSlot 쪽은 서버와 같은 스케줄러 코드로 계산합니다.</p>
+<main class="stage">
+  <section id="phoneCol" aria-label="고객 앱">
+    <p class="col-title">고객 앱</p>
+    <div class="phone">
+      <div class="ph-status num"><span id="phClock">08:30</span><span>LTE ▮▮▮</span></div>
+      <div class="ph-head" id="phHead"></div>
+      <div class="ph-body" id="phBody"></div>
+      <nav class="ph-nav" id="phNav" aria-label="앱 메뉴">
+        <button data-nav="menu"><span class="ico">☕</span>주문하기</button>
+        <button data-nav="orders"><span class="ico">🧾</span>주문내역</button>
+        <button data-nav="me"><span class="ico">👤</span>내 정보</button>
+      </nav>
     </div>
   </section>
 
-  <!-- ② 고객 앱 -->
-  <section class="tabpanel" id="p-app" role="tabpanel" aria-labelledby="tab-app" hidden>
-    <div class="lead">
-      <h2>고객 앱으로 주문해 보기</h2>
-      <p>장바구니를 담으면 픽업 가능한 시각과 혼잡도가 바로 계산됩니다. 주문하면 오른쪽 제조 슬롯 보드가 채워지고, 시간을 흘려보내면 결제 → 제조 → 준비 완료 → 픽업이 진행됩니다.</p>
-    </div>
-    <div class="clock panel" style="grid-template-columns:none">
-      <span class="eyebrow">매장 시계</span><span class="now mono" id="clockNow">08:20</span>
-      <button class="ghost" id="tick">+5분</button><button class="ghost" id="auto">▶ 자동 진행</button>
-      <button class="ghost" id="resetStore">처음 상태로</button>
-      <span class="muted" style="font-size:.84rem">결제하지 않은 주문은 5분 뒤 점유가 풀려 용량이 돌아옵니다.</span>
-    </div>
-    <div class="app">
-      <div class="phone" aria-label="고객 앱 화면">
-        <div class="bar"><span>블루아워커피 역삼점</span><span id="phoneClock">08:20</span></div>
-        <div class="screen" id="screen"></div>
-      </div>
-      <div class="panel">
-        <div class="row" style="justify-content:space-between"><h3>제조 슬롯 보드 <span class="muted" style="font-weight:400">— 스테이션 × 5분, 채워진 부하 / 용량</span></h3></div>
-        <div class="board-wrap"><div class="board" id="board"></div></div>
-        <div class="legend">
-          <span><i style="background:var(--surface-2);box-shadow:inset 0 0 0 2px var(--accent)"></i>선택한 픽업 시각에 맞춰 만들 수 있는 슬롯</span>
-          <span><i style="background:var(--espresso)"></i>에스프레소</span><span><i style="background:var(--blender)"></i>블렌더</span><span><i style="background:var(--brew)"></i>브루바</span>
+  <section id="storeCol" aria-label="매장 화면">
+    <p class="col-title">매장 화면 (바리스타 · 점주)</p>
+    <div class="console">
+      <div class="con-head">
+        <h2>성수역점 매장 관리</h2>
+        <div class="tabs" role="tablist" id="storeTabs">
+          <button role="tab" data-tab="kds" aria-selected="true">제조 현황</button>
+          <button role="tab" data-tab="slots" aria-selected="false">시간대 · 용량</button>
+          <button role="tab" data-tab="menu" aria-selected="false">메뉴 관리</button>
+          <button role="tab" data-tab="sales" aria-selected="false">매출 · 정산</button>
         </div>
-        <p class="note">왜 이 슬롯에? 핫 음료는 신선도 5분이라 픽업 직전 슬롯에서만, 아이스는 10분이라 두 슬롯 중 늦은 쪽부터 배정됩니다. 스테이션은 서로 독립이라 에스프레소가 꽉 차도 스무디는 가능합니다.</p>
       </div>
+      <div class="kpis" id="kpis"></div>
+      <div class="con-body" id="conBody"></div>
     </div>
   </section>
-
-  <!-- ③ 매장 운영 -->
-  <section class="tabpanel" id="p-store" role="tabpanel" aria-labelledby="tab-store" hidden>
-    <div class="lead">
-      <h2>매장(점주 · 바리스타) 화면</h2>
-      <p>고객 앱 탭에서 받은 주문과 같은 데이터입니다. 바리스타는 픽업 순서가 아니라 <b>지금 만들어야 할 음료</b> 순서로 봅니다.</p>
-    </div>
-    <div class="kpis" id="kpis"></div>
-    <div class="store">
-      <div class="panel">
-        <h3>지금 만들 것 · 다음 슬롯</h3>
-        <div class="queue" id="queue"></div>
-      </div>
-      <div class="panel">
-        <h3>스테이션 용량 조절</h3>
-        <p class="muted" style="font-size:.86rem">바리스타 결근, 머신 고장 시 5분당 처리 부하를 줄입니다. 이미 받은 주문이 있는 슬롯은 그만큼 유지되어 <b>한 약속은 지켜집니다</b>.</p>
-        <div id="sliders" style="display:grid;gap:10px"></div>
-        <div class="row"><button class="ghost" id="clock2">+5분 (매장 시계)</button><span class="mono muted" id="clockNow2">08:20</span></div>
-      </div>
-    </div>
-    <div class="panel">
-      <h3>오늘 주문</h3>
-      <div class="tblwrap"><table class="orders"><thead><tr><th>주문</th><th>구성</th><th>약속</th><th>상태</th><th>준비 완료</th></tr></thead><tbody id="orderRows"></tbody></table></div>
-    </div>
-  </section>
-
-  <!-- ④ 결제 · 정산 -->
-  <section class="tabpanel" id="p-money" role="tabpanel" aria-labelledby="tab-money" hidden>
-    <div class="lead">
-      <h2>결제가 실패해도 돈이 틀어지지 않게</h2>
-      <p>주문 · 포인트 · 결제 서비스는 Kafka 로만 대화합니다. 포인트 차감 → 카드 승인 순서로 진행하고, 실패하면 이미 한 일을 멱등한 보상 명령으로 되돌립니다. 아래는 서버의 실제 처리 순서를 재현한 것입니다.</p>
-    </div>
-    <div class="panel">
-      <div class="row">
-        <div class="seg" id="scen" role="group" aria-label="결제 시나리오">
-          <button data-s="ok" aria-pressed="true">정상 승인</button><button data-s="declined" aria-pressed="false">카드 거절</button>
-          <button data-s="lost-recover" aria-pressed="false">PG 응답 유실 → 복구</button><button data-s="lost-timeout" aria-pressed="false">PG 응답 유실 → 타임아웃</button>
-        </div>
-        <div class="seg" id="pts" role="group" aria-label="포인트 사용">
-          <button data-p="2000" aria-pressed="true">포인트 2,000P 사용</button><button data-p="0" aria-pressed="false">카드만</button>
-        </div>
-      </div>
-      <div class="saga">
-        <ol class="steps" id="steps"></ol>
-        <div class="state">
-          <div><span>주문</span><b id="sOrder">-</b></div>
-          <div><span>제조 슬롯</span><b id="sSlot">-</b></div>
-          <div><span>포인트 잔액</span><b id="sPts">3,000P</b></div>
-          <div><span>카드 청구</span><b id="sCard">0원</b></div>
-          <button class="ghost" id="replaySaga">다시 재생</button>
-        </div>
-      </div>
-    </div>
-    <div class="money">
-      <div class="panel">
-        <h3>오늘 정산서 — 역삼점 <span class="muted" style="font-weight:400">(고객 앱 탭의 결제 완료 주문 기준)</span></h3>
-        <div class="stmt" id="stmt"></div>
-        <p class="note">PG 수수료는 거래마다 2.2% 를 반올림한 뒤 합산합니다. 합계에 한 번 곱하면 PG 사 정산 파일과 1원 단위로 어긋나기 때문입니다. 플랫폼 수수료 1% 는 원 미만 절사(가맹점 유리).</p>
-      </div>
-      <div class="panel">
-        <h3>PG 대사 — 우리 원장 ↔ PG 사 정산 파일</h3>
-        <div class="row">
-          <button class="ghost" id="ghost">PG 에만 있는 승인 끼워 넣기</button>
-          <button class="ghost" id="mismatch">금액 불일치 만들기</button>
-          <button class="cta" id="recon">대사 실행</button>
-        </div>
-        <div id="reconOut" class="muted" style="font-size:.88rem">대사를 실행하면 거래번호로 1:1 매칭해 불일치를 찾습니다.</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ⑤ 기술 · 성능 -->
-  <section class="tabpanel" id="p-tech" role="tabpanel" aria-labelledby="tab-tech" hidden>
-    <div class="lead">
-      <h2>어떻게 만들었고, 무엇으로 검증했나</h2>
-      <p>Kotlin · Spring Boot 서비스 4개가 각자의 DB 를 갖고 Kafka 로만 통신합니다. 모든 수치는 실제 서버에서 측정했고, 재현 스크립트가 저장소에 있습니다.</p>
-    </div>
-    <div class="panel arch">
-      <svg viewBox="0 0 900 250" role="img" aria-label="서비스 구성도: 고객·매장 앱이 order-service 를 호출하고, order-service 는 Kafka 를 통해 payment, loyalty, settlement 서비스와 통신한다">
-        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker></defs>
-        <g style="fill:var(--surface-2);stroke:var(--line)">
-          <rect x="10" y="95" width="120" height="60" rx="8"/><rect x="180" y="80" width="190" height="90" rx="8" style="fill:var(--accent-soft);stroke:var(--accent)"/>
-          <rect x="420" y="95" width="110" height="60" rx="8"/><rect x="590" y="15" width="170" height="60" rx="8"/><rect x="590" y="95" width="170" height="60" rx="8"/><rect x="590" y="175" width="170" height="60" rx="8"/>
-        </g>
-        <g style="stroke:var(--muted);stroke-width:1.5;fill:none" marker-end="url(#ar)">
-          <path d="M130 125 H176"/><path d="M370 125 H416"/><path d="M530 115 L586 50"/><path d="M530 125 H586"/><path d="M530 135 L586 200"/>
-        </g>
-        <text x="70" y="122" text-anchor="middle">고객 · 매장 앱</text><text class="sub" x="70" y="140" text-anchor="middle">REST</text>
-        <text x="275" y="108" text-anchor="middle" style="font-weight:700">order-service</text>
-        <text class="sub" x="275" y="128" text-anchor="middle">슬롯 스케줄러 · 주문</text><text class="sub" x="275" y="144" text-anchor="middle">Saga 오케스트레이터 · CQRS</text><text class="sub" x="275" y="160" text-anchor="middle">PostgreSQL · Redis</text>
-        <text x="475" y="122" text-anchor="middle" style="font-weight:700">Kafka</text><text class="sub" x="475" y="140" text-anchor="middle">Outbox → 명령/이벤트</text>
-        <text x="675" y="40" text-anchor="middle" style="font-weight:700">payment-service</text><text class="sub" x="675" y="58" text-anchor="middle">PG 결과 불명 복구</text>
-        <text x="675" y="120" text-anchor="middle" style="font-weight:700">loyalty-service</text><text class="sub" x="675" y="138" text-anchor="middle">복식부기 포인트 원장</text>
-        <text x="675" y="200" text-anchor="middle" style="font-weight:700">settlement-service</text><text class="sub" x="675" y="218" text-anchor="middle">정산 마감 · PG 대사</text>
-      </svg>
-    </div>
-    <div class="proof">
-      <div class="stat"><span class="eyebrow">초과 예약</span><span class="big">0건</span><p>100명이 같은 슬롯에 동시 주문 → 이론값 3건만 수락, 거절 97건 전원 대안 시각 포함 (k6)</p></div>
-      <div class="stat"><span class="eyebrow">결제 완료까지 p95</span><span class="big">0.46s <small>← 13.7s</small></span><p>구간별 지연을 분해해 Kafka 소비 병목을 찾고, 처리량 2배에서 개선</p></div>
-      <div class="stat"><span class="eyebrow">테스트</span><span class="big">71개 <small>+ 9</small></span><p>Testcontainers 통합 · 실행계획 회귀 · API 명세 드리프트 · 서비스 4개 E2E · (Python 도구 9)</p></div>
-    </div>
-    <div class="tables">
-      <div class="tbl"><table>
-        <caption>부하 테스트 · 300 req/s 혼합, 오류 0%</caption>
-        <thead><tr><th>API</th><th class="num">p50</th><th class="num">p95</th><th class="num">p99</th></tr></thead>
-        <tbody>
-          <tr><td>픽업 가능 시각 조회</td><td class="num">1.8ms</td><td class="num">11.8ms</td><td class="num">33.6ms</td></tr>
-          <tr><td>주문 생성</td><td class="num">9.8ms</td><td class="num">34.5ms</td><td class="num">94.5ms</td></tr>
-          <tr><td>결제 시작</td><td class="num">4.2ms</td><td class="num">18.6ms</td><td class="num">47.9ms</td></tr>
-          <tr><td>결제 시작 → 주문 확정</td><td class="num">237ms</td><td class="num">463ms</td><td class="num">688ms</td></tr>
-        </tbody></table></div>
-      <div class="tbl"><table>
-        <caption>쿼리 튜닝 · EXPLAIN ANALYZE 실측</caption>
-        <thead><tr><th>쿼리</th><th class="num">Before</th><th class="num">After</th></tr></thead>
-        <tbody>
-          <tr><td>주문내역 1000페이지째 (200만 행)</td><td class="num">51.5ms</td><td class="num">0.07ms</td></tr>
-          <tr><td>결제 대기 만료 스캔</td><td class="num">2.1ms</td><td class="num">0.22ms</td></tr>
-          <tr><td>Outbox 미발행 폴링</td><td class="num">140.9ms</td><td class="num">0.08ms</td></tr>
-          <tr><td>포인트 사용 가능 lot</td><td class="num">1.79ms</td><td class="num">0.085ms</td></tr>
-          <tr><td>정산 마감 대상</td><td class="num">161.2ms</td><td class="num">4.3ms</td></tr>
-        </tbody></table></div>
-    </div>
-    <div class="tbl"><table>
-      <caption>핵심 설계 결정 (전문은 저장소 docs/adr)</caption>
-      <tbody>
-        <tr><td>초과 예약 방지</td><td>슬롯 행을 (스테이션, 시각) 순서로 잠가 교착상태 없이 직렬화 + DB CHECK 제약</td></tr>
-        <tr><td>메시지 유실 방지</td><td>Transactional Outbox + 멱등 소비자(Inbox) + DLT</td></tr>
-        <tr><td>결제</td><td>Orchestration Saga · PG 호출은 DB 트랜잭션 밖 · 결과 불명 시 조회로 복구</td></tr>
-        <tr><td>포인트</td><td>복식부기 원장 · 차변=대변을 DB 트리거로 강제 · 만료 임박 lot 부터 차감</td></tr>
-        <tr><td>조회 성능</td><td>Redis 슬롯 사용량 캐시(버전 비교로 역전 방지), keyset 페이지네이션, 부분 인덱스</td></tr>
-        <tr><td>AI 개발</td><td>Claude Code 로 설계~문서화 · 커맨드 · 서브에이전트 · 훅 · PR 자동 리뷰 · 실행계획 진단 도구</td></tr>
-      </tbody></table></div>
-  </section>
-
-  <footer>
-    <span>Kotlin · Spring Boot · PostgreSQL · Kafka · Redis</span>
-    <a href="https://github.com/sokldjs554/brewslot">소스 코드</a>
-    <a href="https://github.com/sokldjs554/brewslot/tree/main/docs/adr">설계 결정(ADR) 9건</a>
-    <a href="https://github.com/sokldjs554/brewslot/blob/main/docs/demo.md">실제 서버 데모 로그</a>
-    <a href="https://github.com/sokldjs554/brewslot/blob/main/docs/performance/load-test.md">부하 테스트 보고서</a>
-    <span>이 페이지는 서버 없이 브라우저에서 동작합니다. 스케줄러는 서버 코드와 같은 결과를 CI 로 검증합니다.</span>
-  </footer>
-</div>
+</main>
+<footer>데모 화면입니다. 주문 · 결제 · 다른 손님은 모두 브라우저 안에서 가상으로 만들어지며 실제 결제는 일어나지 않습니다. · <a href="https://github.com/sokldjs554/brewslot">GitHub</a></footer>
 
 <script src="scheduler.js"></script>
-<script src="sim.js"></script>
 <script>
-(function () {
-  const S = window.BrewScheduler, SLOT = S.SLOT;
+(() => {
+  'use strict';
+  const S = globalThis.BrewScheduler;
   const $ = (id) => document.getElementById(id);
-  const DAY = 1790546400;               // 2026-09-28 07:00 KST
-  const hhmm = (t) => { const m = 7 * 60 + (t - DAY) / 60; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(Math.round(m % 60)).padStart(2, '0'); };
+  const DAY = 1790546400; // 2026-09-28 07:00 KST (epoch 초)
+  const T = (h, m) => DAY + ((h - 7) * 60 + m) * 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  const clockOf = (t) => { const s = t - DAY + 7 * 3600; return [Math.floor(s / 3600) % 24, Math.floor((s % 3600) / 60), s % 60]; };
+  const hhmm = (t) => { const [h, m] = clockOf(t); return pad(h) + ':' + pad(m); };
+  const hhmmss = (t) => { const [h, m, s] = clockOf(t); return pad(h) + ':' + pad(m) + ':' + pad(Math.floor(s)); };
   const won = (n) => n.toLocaleString('ko-KR') + '원';
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const LABEL = { ESPRESSO: '에스프레소', BLENDER: '블렌더', BREW_BAR: '브루바' };
-  const COLOR = { ESPRESSO: 'var(--espresso)', BLENDER: 'var(--blender)', BREW_BAR: 'var(--brew)' };
+  const SLOT = S.SLOT;
+  const HOLD_SEC = 180;
+
+  const STATION = {
+    ESPRESSO: { name: '에스프레소 바', color: 'var(--espresso)' },
+    BLENDER: { name: '블렌더', color: 'var(--blender)' },
+    BREW_BAR: { name: '브루 바', color: 'var(--brew)' },
+  };
   const MENU = [
-    { id: 1001, name: '아메리카노(HOT)', short: '아메(H)', price: 3500, station: 'ESPRESSO', load: 1, fresh: 5 },
-    { id: 1002, name: '아이스 아메리카노', short: '아아', price: 3500, station: 'ESPRESSO', load: 1, fresh: 10 },
-    { id: 1003, name: '카페라떼(HOT)', short: '라떼(H)', price: 4500, station: 'ESPRESSO', load: 2, fresh: 5 },
-    { id: 1004, name: '아이스 바닐라라떼', short: '바닐라', price: 5000, station: 'ESPRESSO', load: 2, fresh: 10 },
-    { id: 1005, name: '딸기 스무디', short: '스무디', price: 6000, station: 'BLENDER', load: 3, fresh: 10 },
-    { id: 1006, name: '핸드드립(에티오피아)', short: '드립', price: 6500, station: 'BREW_BAR', load: 2, fresh: 10 },
+    { id: 1, name: '아이스 아메리카노', price: 3500, station: 'ESPRESSO', load: 1, fresh: 10, cat: 'coffee', icon: '🧊', desc: '고소한 하우스 블렌드', w: 30 },
+    { id: 2, name: '아메리카노', price: 3500, station: 'ESPRESSO', load: 1, fresh: 5, cat: 'coffee', icon: '☕', desc: '따뜻하게 · 픽업 직전에 내려요', w: 14 },
+    { id: 3, name: '카페라떼', price: 4500, station: 'ESPRESSO', load: 2, fresh: 5, cat: 'coffee', icon: '🥛', desc: '스팀 밀크 · 따뜻하게', w: 14 },
+    { id: 4, name: '아이스 바닐라라떼', price: 5000, station: 'ESPRESSO', load: 2, fresh: 10, cat: 'coffee', icon: '🍦', desc: '마다가스카르 바닐라 빈 시럽', w: 12 },
+    { id: 5, name: '딸기 스무디', price: 6000, station: 'BLENDER', load: 3, fresh: 10, cat: 'non', icon: '🍓', desc: '생딸기 듬뿍', w: 7 },
+    { id: 6, name: '망고 요거트 스무디', price: 6300, station: 'BLENDER', load: 3, fresh: 10, cat: 'non', icon: '🥭', desc: '그릭 요거트 베이스', w: 5 },
+    { id: 7, name: '핸드드립 에티오피아', price: 6500, station: 'BREW_BAR', load: 2, fresh: 10, cat: 'brew', icon: '🫖', desc: '예가체프 · 꽃향, 산미', w: 5 },
+    { id: 8, name: '핸드드립 콜롬비아', price: 6500, station: 'BREW_BAR', load: 2, fresh: 10, cat: 'brew', icon: '🌰', desc: '수프리모 · 견과류, 초콜릿', w: 4 },
   ];
   const byId = Object.fromEntries(MENU.map((m) => [m.id, m]));
-  const BASE_CAP = { ESPRESSO: 6, BLENDER: 3, BREW_BAR: 2 };
+  const CATS = [['all', '전체'], ['coffee', '커피'], ['non', '논커피'], ['brew', '핸드드립']];
+  const ACTIVE = new Set(['HELD', 'PAID', 'READY', 'PICKED_UP']);
+  const CARDS = [
+    { id: 'ok', name: '국민카드', no: '**** 4821', note: '' },
+    { id: 'declined', name: '신한카드', no: '**** 0917', note: '잔액 부족', red: true },
+  ];
 
-  // ───────── tabs ─────────
-  const tabs = [...document.querySelectorAll('[role=tab]')];
-  function showTab(id) {
-    tabs.forEach((t) => { const on = t.id === id; t.setAttribute('aria-selected', String(on)); $(t.getAttribute('aria-controls')).hidden = !on; });
-    if (id === 'tab-store') renderStore();
-    if (id === 'tab-money') renderMoney();
-  }
-  tabs.forEach((t) => t.addEventListener('click', () => showTab(t.id)));
-  const hashTab = { rush: 'tab-rush', app: 'tab-app', store: 'tab-store', money: 'tab-money', tech: 'tab-tech' }[location.hash.slice(1)];
+  function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
-  // ───────── ① 러시아워 비교 ─────────
-  let nCustomers = 120, seed = 7, sims = null, pickCap = 4;
-  function runSims() {
-    const customers = RushSim.demand(DAY, nCustomers, MENU, seed);
-    const brew = RushSim.brewslot(customers, BASE_CAP, DAY);
-    const naive = [2, 3, 4, 5, 6, 7].map((per) => ({ per, r: RushSim.countCap(customers, BASE_CAP, per, DAY) }));
-    const match = naive.find((x) => x.r.accepted >= brew.accepted) || naive[naive.length - 1];
-    sims = { customers, brew, naive, match };
-    pickCap = match.per;
-  }
-  function svgEl(w, h, inner, label) { return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${label}">${inner}</svg>`; }
-  function renderScatter() {
-    const { brew, naive } = sims;
-    const W = 560, H = 300, L = 48, R = 20, T = 18, B = 42;
-    const xs = naive.map((x) => x.r.accepted).concat(brew.accepted);
-    const x0 = Math.floor((Math.min(...xs) - 5) / 10) * 10, x1 = Math.ceil((Math.max(...xs) + 5) / 10) * 10;
-    const X = (v) => L + ((v - x0) / (x1 - x0)) * (W - L - R), Y = (p) => T + (1 - p) * (H - T - B);
-    let g = '';
-    [0, 0.25, 0.5, 0.75, 1].forEach((p) => { g += `<line x1="${L}" x2="${W - R}" y1="${Y(p)}" y2="${Y(p)}" style="stroke:var(--grid)"/><text x="${L - 8}" y="${Y(p) + 4}" text-anchor="end">${p * 100}%</text>`; });
-    for (let v = x0; v <= x1; v += 10) g += `<text x="${X(v)}" y="${H - B + 18}" text-anchor="middle">${v}</text>`;
-    g += `<text x="${(L + W - R) / 2}" y="${H - 6}" text-anchor="middle">받은 주문 수 (${nCustomers}명 중)</text>`;
-    g += `<text x="${W - R}" y="${T + 12}" text-anchor="end" style="font-weight:600">많이 받고 약속도 지킴 ↗</text>`;
-    const pts = naive.map((x) => [X(x.r.accepted), Y(x.r.onTimeRate)]);
-    g += `<polyline points="${pts.map((p) => p.join(',')).join(' ')}" style="fill:none;stroke:var(--baseline);stroke-width:2"/>`;
-    naive.forEach((x, i) => {
-      const [cx, cy] = pts[i], sel = x.per === pickCap;
-      g += `<g><title>5분당 ${x.per}건 제한: 주문 ${x.r.accepted}건, 약속 준수 ${(x.r.onTimeRate * 100).toFixed(0)}%</title>
-        <circle cx="${cx}" cy="${cy}" r="${sel ? 7 : 5.5}" style="fill:var(--baseline);stroke:var(--surface);stroke-width:2"/>
-        <text class="lbl" x="${cx}" y="${cy + (x.r.onTimeRate > 0.9 ? 20 : -11)}" text-anchor="middle">${x.per}건</text></g>`;
-    });
-    const bx = X(brew.accepted), by = Y(brew.onTimeRate);
-    g += `<g><title>BrewSlot: 주문 ${brew.accepted}건, 약속 준수 100%</title>
-      <rect x="${bx - 8}" y="${by - 8}" width="16" height="16" transform="rotate(45 ${bx} ${by})" style="fill:var(--accent);stroke:var(--surface);stroke-width:2"/>
-      <text class="lbl-accent" x="${bx}" y="${by - 14}" text-anchor="middle">BrewSlot</text></g>`;
-    $('scatter').innerHTML = svgEl(W, H, g, `건수 제한 방식은 주문을 많이 받을수록 약속 준수율이 떨어지고, BrewSlot 은 ${brew.accepted}건을 받으면서 100%를 지킨다`);
-  }
-  function renderVersus() {
-    const { brew, match } = sims, r = match.r;
-    $('vsNaiveName').textContent = `5분당 ${match.per}건 제한`;
-    $('vsNaiveRate').textContent = Math.round(r.onTimeRate * 100) + '%';
-    $('vsBrewRate').textContent = Math.round(brew.onTimeRate * 100) + '%';
-    const rows = [
-      ['받은 주문', `${r.accepted}건`, `${brew.accepted}건`],
-      ['늦게 나온 주문', `${r.accepted - r.onTime}건`, `${brew.accepted - brew.onTime}건`],
-      ['늦은 주문의 평균 지연', r.avgLateMin ? `${r.avgLateMin.toFixed(1)}분` : '-', '-'],
-      ['시각을 바꿔 받은 주문', `${r.shifted}건`, `${brew.shifted}건`],
-    ];
-    $('vsKv').innerHTML = `<dt></dt><dd style="display:flex;gap:18px;justify-content:flex-end"><span>건수 제한</span><span>BrewSlot</span></dd>` +
-      rows.map(([k, a, b]) => `<dt>${k}</dt><dd style="display:flex;gap:18px;justify-content:flex-end"><span>${a}</span><span style="color:var(--ink);font-weight:600">${b}</span></dd>`).join('');
-    const safe = sims.naive.filter((x) => x.r.onTimeRate === 1).pop();
-    $('vsNote').innerHTML = `건수 제한은 <b>약속을 지키려면 주문을 덜 받고</b>(${safe ? `5분당 ${safe.per}건이면 100%지만 ${safe.r.accepted}건만 받음` : '100%인 설정이 없음'}),
-      <b>더 받으려면 약속을 깹니다</b>. BrewSlot 은 음료별 부하를 보기 때문에 둘 다 지킵니다.`;
-    $('laneNaiveName').textContent = `건수 제한 (5분당 ${match.per}건)`;
-  }
-  function laneSvg(orders, clock, label) {
-    const W = 900, H = 130, L = 30, R = 8, T = 8, B = 24;
-    const times = []; for (let t = DAY + 60 * 60; t <= DAY + 150 * 60; t += SLOT) times.push(t); // 08:00 ~ 09:30
-    const bw = (W - L - R) / times.length;
-    const counts = times.map((t) => {
-      const os = orders.filter((o) => o.promise === t && o.c.arrival <= clock);
-      return { t, total: os.length, late: clock >= t ? os.filter((o) => o.late > 0).length : 0 }; // 늦었는지는 약속 시각이 지나야 드러난다
-    });
-    const perSlotMax = (os) => { const m = new Map(); os.forEach((o) => m.set(o.promise, (m.get(o.promise) || 0) + 1)); return Math.max(0, ...m.values()); };
-    const maxY = Math.max(10, Math.ceil(Math.max(perSlotMax(sims.match.r.orders), perSlotMax(sims.brew.orders)) / 5) * 5), Y = (v) => T + (1 - v / maxY) * (H - T - B);
-    let g = '';
-    [0, maxY / 2, maxY].forEach((v) => { g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" style="stroke:var(--grid)"/><text x="${L - 5}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`; });
-    counts.forEach((c, i) => {
-      const x = L + i * bw + 3, w = bw - 6, ok = c.total - c.late;
-      if (ok > 0) g += `<rect x="${x}" y="${Y(ok)}" width="${w}" height="${Y(0) - Y(ok)}" rx="3" style="fill:var(--ok)"><title>${hhmm(c.t)} 픽업: 제시간 ${ok}건</title></rect>`;
-      if (c.late > 0) g += `<rect x="${x}" y="${Y(c.total) }" width="${w}" height="${Y(ok) - Y(c.total) - 2}" rx="3" style="fill:var(--bad)"><title>${hhmm(c.t)} 픽업: 늦음 ${c.late}건</title></rect>`;
-      if (i % 2 === 0) g += `<text x="${x + w / 2}" y="${H - 6}" text-anchor="middle">${hhmm(c.t)}</text>`;
-    });
-    if (clock < DAY + 200 * 60) { const cx = L + ((clock - (DAY + 60 * 60)) / SLOT) * bw; if (cx >= L && cx <= W - R) g += `<line x1="${cx}" x2="${cx}" y1="${T}" y2="${H - B}" style="stroke:var(--accent);stroke-width:2"/>`; }
-    return svgEl(W, H, g, label);
-  }
-  function renderLanes(clock) {
-    const { brew, match } = sims;
-    $('laneNaive').innerHTML = laneSvg(match.r.orders, clock, '건수 제한 방식의 픽업 시각별 제시간/늦은 주문 수');
-    $('laneBrew').innerHTML = laneSvg(brew.orders, clock, 'BrewSlot 의 픽업 시각별 제시간/늦은 주문 수');
-    const done = (o) => o.c.arrival <= clock;
-    const nl = match.r.orders.filter(done), bl = brew.orders.filter(done);
-    const lateN = nl.filter((o) => o.late > 0 && o.promise <= clock).length;
-    $('laneNaivePill').textContent = `늦음 ${lateN}건`;
-    $('laneBrewPill').textContent = `늦음 ${bl.filter((o) => o.late > 0).length}건`;
-    $('replayClock').textContent = clock >= DAY + 200 * 60 ? '하루 전체' : hhmm(clock);
-  }
-  function renderRush() { runSims(); renderScatter(); renderVersus(); renderLanes(DAY + 240 * 60); $('nLabel').textContent = nCustomers; }
-  $('nSeg').addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    $('nSeg').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    nCustomers = Number(b.dataset.n); renderRush();
-  });
-  $('reseed').addEventListener('click', () => { seed = (seed * 31 + 11) % 997; renderRush(); });
-  let replayTimer = null;
-  $('replay').addEventListener('click', () => {
-    clearInterval(replayTimer);
-    let clock = DAY + 10 * 60;
-    if (reduceMotion) { renderLanes(DAY + 240 * 60); return; }
-    replayTimer = setInterval(() => { clock += SLOT; renderLanes(clock); if (clock >= DAY + 150 * 60) { clearInterval(replayTimer); renderLanes(DAY + 240 * 60); } }, 170);
-  });
-
-  // ───────── 매장 상태 (② ③ ④ 공유) ─────────
-  const START = DAY + 80 * 60; // 08:20
-  const COLS = 14;
-  let now, reserved, stationCap, orders, seq, cart, selected, lastAlloc, wallet, pgFile, autoTimer = null, screen = 'order', activeId = null;
-  const usage = { stateOf: (st, s) => { const r = reserved.get(st + '@' + s) || 0; return { capacity: Math.max(stationCap[st], r), reserved: r }; } };
-  const demandsOf = (c) => Object.entries(c).flatMap(([id, q]) => Array.from({ length: q }, () => ({ station: byId[id].station, load: byId[id].load, fresh: byId[id].fresh })));
-  const add = (allocs, sign) => allocs.forEach((a) => reserved.set(a.station + '@' + a.slot, (reserved.get(a.station + '@' + a.slot) || 0) + sign * a.units));
-  const candidates = () => Array.from({ length: 16 }, (_, i) => now + SLOT * (i + 1)).filter((t) => t <= DAY + 180 * 60);
-  const cartText = (c) => Object.entries(c).map(([id, q]) => `${byId[id].short}×${q}`).join(' ');
-  const cartTotal = (c) => Object.entries(c).reduce((s, [id, q]) => s + byId[id].price * q, 0);
-
-  function newOrder(c, promise, allocs, status, extra = {}) {
-    const o = { id: seq++, cart: { ...c }, promise, allocs, status, total: cartTotal(c), points: 0, card: 0, holdUntil: now + SLOT,
-      first: Math.min(...allocs.map((a) => a.slot)), last: Math.max(...allocs.map((a) => a.slot)) + SLOT, readyAt: null, pgTx: null, ...extra };
-    orders.push(o); return o;
-  }
-  function resetStore() {
-    now = START; reserved = new Map(); stationCap = { ...BASE_CAP }; orders = []; seq = 101; lastAlloc = new Set(); wallet = 3000; pgFile = [];
-    const SEED = [[6, { 1003: 1, 1002: 1 }], [6, { 1004: 1 }], [7, { 1002: 2 }], [5, { 1001: 2 }], [6, { 1005: 1 }], [8, { 1003: 1 }],
-      [9, { 1004: 1, 1005: 1 }], [4, { 1006: 1 }], [7, { 1006: 1 }], [10, { 1002: 1 }], [3, { 1001: 1 }], [11, { 1004: 2 }]];
-    SEED.forEach(([k, c]) => {
-      const t = START + SLOT * k, r = S.schedule(t, demandsOf(c), usage, START);
-      if (!r.feasible) return;
-      add(r.allocations, 1);
-      const o = newOrder(c, t, r.allocations, 'PAID'); o.card = o.total; o.pgTx = 'pg_' + o.id;
-      pgFile.push({ tx: o.pgTx, order: o.id, amount: o.card, fee: fee(o.card) });
-    });
-    cart = { 1004: 1, 1005: 1 }; selected = START + SLOT * 6; screen = 'order'; activeId = null;
-    renderApp();
-  }
-
-  function advance() {
-    now += SLOT;
-    orders.forEach((o) => {
-      if (o.status === 'PENDING_PAYMENT' && now >= o.holdUntil) { o.status = 'EXPIRED'; add(o.allocs, -1); }
-      if (o.status === 'PAID' && now >= o.first) o.status = 'PREPARING';
-      if (o.status === 'PREPARING' && now >= o.last) { o.status = 'READY'; o.readyAt = o.last; }
-      if (o.status === 'READY' && now >= o.promise) o.status = 'PICKED_UP';
-    });
-    if (selected <= now) selected = now + SLOT * 2;
-    renderApp(); renderStore();
-    if (now >= DAY + 150 * 60) stopAuto();
-  }
-  function stopAuto() { clearInterval(autoTimer); autoTimer = null; $('auto').textContent = '▶ 자동 진행'; }
-  $('tick').addEventListener('click', advance);
-  $('clock2').addEventListener('click', advance);
-  $('auto').addEventListener('click', () => { if (autoTimer) { stopAuto(); return; } $('auto').textContent = '❚❚ 멈춤'; autoTimer = setInterval(advance, reduceMotion ? 1500 : 1100); });
-  $('resetStore').addEventListener('click', () => { stopAuto(); resetStore(); renderStore(); });
-
-  // ───────── ② 고객 앱 ─────────
-  const REASON = { CAPACITY_EXHAUSTED: '신선도 창 안의 제조 슬롯이 모두 찼어요', NO_PRODUCTION_WINDOW: '만들 시간이 이미 지났어요', EXCEEDS_SLOT_CAPACITY: '한 잔의 부하가 슬롯 용량보다 커요' };
-  function renderApp() {
-    $('clockNow').textContent = hhmm(now); $('phoneClock').textContent = hhmm(now); $('clockNow2').textContent = hhmm(now);
-    if (screen === 'order') renderOrderScreen(); else renderTrackScreen();
-    renderBoard();
-  }
-  function renderOrderScreen(result) {
-    const d = demandsOf(cart), total = cartTotal(cart);
-    const times = candidates().slice(0, 12).map((t) => {
-      const ok = d.length > 0 && S.schedule(t, d, usage, now).feasible, load = S.loadPercentBefore(t, usage);
-      return `<button class="time ${ok ? '' : 'no'} ${t === selected ? 'sel' : ''} ${load >= 80 ? 'busy' : ''}" data-t="${t}" aria-pressed="${t === selected}">
-        <span class="t">${hhmm(t)}</span><span class="l">${ok ? (load >= 80 ? '혼잡' : '여유') : '불가'} ${load}%</span></button>`;
-    }).join('');
-    const reorder = orders.filter((o) => o.mine && o.status === 'PICKED_UP').slice(-1)[0];
-    $('screen').innerHTML = `
-      ${reorder ? `<button class="ghost" data-act="reorder" data-id="${reorder.id}">↻ 지난 주문 다시 담기 · ${cartText(reorder.cart)}</button>` : ''}
-      <div class="menu">${MENU.map((m) => `
-        <div class="item"><div><div class="name">${m.name}</div>
-          <div class="meta"><span>${won(m.price)}</span><span class="st"><i style="background:${COLOR[m.station]}"></i>${LABEL[m.station]} 부하 ${m.load}</span><span>신선도 ${m.fresh}분</span></div></div>
-          <div class="qty"><button aria-label="${m.name} 빼기" data-d="-1" data-id="${m.id}">−</button><span>${cart[m.id] || 0}</span><button aria-label="${m.name} 담기" data-d="1" data-id="${m.id}">+</button></div></div>`).join('')}</div>
-      <div class="total"><span class="muted">합계</span><b class="mono">${won(total)}</b></div>
-      <div><div class="eyebrow" style="margin-bottom:6px">언제 받을까요? · 장바구니 기준</div><div class="times">${times}</div></div>
-      <button class="cta" data-act="place" ${total ? '' : 'disabled'}>${hhmm(selected)} 픽업으로 주문하기</button>
-      ${result || ''}`;
-  }
-  function trackSteps(o) {
-    const st = o.status, order = ['PENDING_PAYMENT', 'PAYING', 'PAID', 'PREPARING', 'READY', 'PICKED_UP'];
-    const idx = order.indexOf(st);
-    const li = (name, i, at) => {
-      const cls = st === 'CANCELLED' || st === 'EXPIRED' ? (i <= 1 ? 'done' : '') : i < idx ? 'done' : i === idx ? 'now' : '';
-      return `<li class="${cls}"><span>${name}</span><span class="at">${at || ''}</span></li>`;
+  // ───────────────────────── 상태 ─────────────────────────
+  let st;
+  let dirty = true;
+  function freshState() {
+    return {
+      now: T(8, 10), genClock: T(8, 10), playing: true, speed: 10, rng: mulberry32(20260928),
+      seq: 100, orders: [], cap: { ESPRESSO: 6, BLENDER: 3, BREW_BAR: 2 }, soldOut: new Set(), accepting: true, autoStaff: true,
+      lost: 0, log: [],
+      points: 3000, pointLog: [{ t: T(8, 0), amt: 3000, memo: '가입 축하 포인트' }],
+      cart: [], pickSel: null, route: 'menu', cat: 'all', viewOrder: null, conflict: null, payCard: 'ok', usePoints: true, payOrder: null, payMsg: null, toast: null,
+      storeTab: 'kds',
     };
-    let html = li('주문 접수 · 슬롯 점유', 0, '') + li('결제', 1, '') + li('결제 완료', 2, '') + li('제조 중', 3, hhmm(o.first) + '~') + li('준비 완료', 4, o.readyAt ? hhmm(o.readyAt) : `${hhmm(o.last)} 예정`) + li('픽업', 5, `약속 ${hhmm(o.promise)}`);
-    if (st === 'CANCELLED') html += `<li class="fail"><span>취소 — ${o.cancelReason}</span><span class="at"></span></li>`;
-    if (st === 'EXPIRED') html += `<li class="fail"><span>결제하지 않아 점유 만료 · 슬롯 반환</span><span class="at">${hhmm(o.holdUntil)}</span></li>`;
-    return html;
   }
-  function renderTrackScreen() {
-    const o = orders.find((x) => x.id === activeId);
-    const canPay = o.status === 'PENDING_PAYMENT';
-    const usePts = Math.min(wallet, o.total);
-    $('screen').innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:baseline"><b>주문 #${o.id}</b><span class="mono">${won(o.total)}</span></div>
-      <div class="muted" style="font-size:.86rem">${cartText(o.cart)} · <b style="color:var(--ink)">${hhmm(o.promise)} 픽업 약속</b></div>
-      <ol class="tracker">${trackSteps(o)}</ol>
-      ${canPay ? `<div class="opts">
-          <label><input type="checkbox" id="usePts" ${usePts ? 'checked' : ''}> 포인트 ${usePts.toLocaleString()}P 사용 <span class="muted">(보유 ${wallet.toLocaleString()}P)</span></label>
-          <label><input type="radio" name="card" id="cardOk" value="ok" checked> 카드 정상 승인</label>
-          <label><input type="radio" name="card" id="cardNo" value="declined"> 카드 거절 (보상 흐름 보기)</label>
-          <span class="muted" style="font-size:.8rem">점유 만료 ${hhmm(o.holdUntil)} — 매장 시계가 넘어가면 슬롯이 풀립니다</span>
-        </div>
-        <button class="cta" data-act="pay">결제하기</button>` : ''}
-      ${o.payLog ? `<div class="result ${o.status === 'CANCELLED' ? 'bad' : 'ok'}" style="font-size:.82rem">${o.payLog}</div>` : ''}
-      ${o.status !== 'PENDING_PAYMENT' && o.status !== 'PAYING' ? `<button class="ghost" data-act="back">새 주문하기</button>` : ''}
-      <span class="muted" style="font-size:.8rem">위 "+5분" 또는 "자동 진행" 으로 시간을 흘려보내 보세요.</span>`;
+
+  const earliest = () => Math.ceil(st.now / SLOT) * SLOT;
+  const candidates = () => Array.from({ length: 12 }, (_, i) => earliest() + SLOT * (i + 1));
+
+  function usage() {
+    const m = new Map();
+    for (const o of st.orders) {
+      if (!ACTIVE.has(o.status)) continue;
+      for (const tk of o.tickets) { const k = tk.station + '@' + tk.slot; m.set(k, (m.get(k) || 0) + tk.units); }
+    }
+    return { stateOf(station, slot) { const r = m.get(station + '@' + slot) || 0; return { capacity: Math.max(st.cap[station], r), reserved: r }; } };
   }
-  function renderBoard() {
-    const d = screen === 'order' ? demandsOf(cart) : [];
-    const win = new Set(d.flatMap((x) => S.productionSlots(selected, x.fresh, now).map((s) => x.station + '@' + s)));
-    let html = '<div></div>' + Array.from({ length: COLS }, (_, i) => { const s = START + SLOT * i; return `<div class="h ${s === now ? 'cur' : ''}">${hhmm(s)}</div>`; }).join('');
-    S.STATIONS.forEach((st) => {
-      html += `<div class="rowlabel">${LABEL[st]}<small>${stationCap[st]} / 5분</small></div>`;
-      for (let i = 0; i < COLS; i++) {
-        const s = START + SLOT * i, k = st + '@' + s, { capacity: cap, reserved: r } = usage.stateOf(st, s);
-        const pct = cap ? (r / cap) * 100 : 0;
-        html += `<div class="cell ${cap === 0 ? 'none' : ''} ${r >= cap && cap > 0 ? 'full' : ''} ${s < now ? 'past' : ''} ${win.has(k) ? 'win' : ''} ${lastAlloc.has(k) ? 'new' : ''}" title="${LABEL[st]} ${hhmm(s)} 슬롯: ${r}/${cap}">
-          <div class="fill" style="height:${pct}%;background:${COLOR[st]}"></div><div class="n">${r}/${cap}</div></div>`;
+  const demandsOf = (items) => items.map((l) => { const m = byId[l.menuId]; return { station: m.station, load: m.load * l.qty, fresh: m.fresh, line: l }; });
+
+  // S.schedule 과 같은 순서 · 같은 규칙으로 각 주문 줄이 어느 슬롯에서 만들어지는지 기록 (제조 티켓용)
+  function assignLines(pickup, ds, u, e) {
+    const tent = new Map(); const out = [];
+    for (const d of ds.slice().sort((a, b) => a.fresh - b.fresh || b.load - a.load)) {
+      const key = (s) => d.station + '@' + s;
+      const slot = S.productionSlots(pickup, d.fresh, e).find((s) => { const x = u.stateOf(d.station, s); return x.capacity - x.reserved - (tent.get(key(s)) || 0) >= d.load; });
+      tent.set(key(slot), (tent.get(key(slot)) || 0) + d.load);
+      out.push({ station: d.station, slot, line: d.line, units: d.load });
+    }
+    return out;
+  }
+
+  function tryPlace(items, pickup, mine) {
+    if (!st.accepting) return { ok: false, reason: 'CLOSED', alts: [] };
+    if (items.some((l) => st.soldOut.has(l.menuId))) return { ok: false, reason: 'SOLD_OUT', alts: [] };
+    const u = usage(); const ds = demandsOf(items); const e = earliest();
+    const r = S.schedule(pickup, ds, u, e);
+    if (!r.feasible) return { ok: false, reason: r.reason, alts: S.nearestAlternatives(pickup, candidates(), ds, u, e) };
+    const groups = new Map();
+    for (const a of assignLines(pickup, ds, u, e)) {
+      const k = a.station + '@' + a.slot;
+      if (!groups.has(k)) groups.set(k, { station: a.station, slot: a.slot, units: 0, lines: [], done: false, doneAt: null });
+      const g = groups.get(k); g.units += a.units; g.lines.push({ menuId: a.line.menuId, qty: a.line.qty });
+    }
+    const tickets = [...groups.values()].sort((a, b) => a.slot - b.slot);
+    const total = items.reduce((s, l) => s + byId[l.menuId].price * l.qty, 0);
+    const o = {
+      id: 'o' + (++st.seq), no: st.seq, mine, items: items.map((l) => ({ ...l })), pickup, tickets, total,
+      status: mine ? 'HELD' : 'PAID', createdAt: st.now, holdUntil: mine ? st.now + HOLD_SEC : null,
+      paidAt: mine ? null : st.now, readyAt: null, pickedAt: null, pickAt: null,
+      pay: mine ? null : { card: total, points: 0 },
+    };
+    st.orders.push(o);
+    if (!mine) addLog(`#${o.no} 주문 접수 · ${hhmm(pickup)} 픽업 · ${itemsText(o.items)}`);
+    return { ok: true, order: o };
+  }
+
+  const itemsText = (items) => items.map((l) => byId[l.menuId].name + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ');
+  const firstSlot = (o) => Math.min(...o.tickets.map((t) => t.slot));
+  function addLog(msg) { st.log.unshift({ t: st.now, msg }); if (st.log.length > 80) st.log.pop(); }
+
+  // ───────────────────────── 매장에 오는 다른 손님들 ─────────────────────────
+  function rate(t) { const [h, m] = clockOf(t); const mm = h * 60 + m; if (mm >= 8 * 60 + 40 && mm < 9 * 60 + 30) return 1.4; if (mm >= 8 * 60 + 15 && mm < 10 * 60) return 0.7; return 0.35; }
+  function poisson(l) { const L = Math.exp(-l); let k = 0, p = 1; do { k++; p *= st.rng(); } while (p > L); return k - 1; }
+  function pickMenu() {
+    const avail = MENU.filter((m) => !st.soldOut.has(m.id)); if (!avail.length) return null;
+    let x = st.rng() * avail.reduce((s, m) => s + m.w, 0);
+    for (const m of avail) { x -= m.w; if (x <= 0) return m; }
+    return avail[avail.length - 1];
+  }
+  function walkIn() {
+    if (!st.accepting) return;
+    const n = 1 + (st.rng() < 0.3 ? 1 : 0) + (st.rng() < 0.08 ? 1 : 0); const items = [];
+    for (let i = 0; i < n; i++) { const m = pickMenu(); if (!m) return; const ex = items.find((l) => l.menuId === m.id); if (ex) ex.qty++; else items.push({ menuId: m.id, qty: st.rng() < 0.1 ? 2 : 1 }); }
+    const want = earliest() + SLOT * (1 + Math.floor(st.rng() * 5));
+    let r = tryPlace(items, want, false);
+    if (!r.ok && r.alts.length && st.rng() < 0.7) r = tryPlace(items, r.alts[0], false);
+    if (!r.ok) { st.lost++; addLog(`${hhmm(want)} 픽업을 원한 손님 — 가능한 시간이 맞지 않아 주문하지 않음`); }
+  }
+  const procTime = (tk) => Math.min(270, 80 + tk.units * 30);
+
+  function processAt(t) {
+    const prevSlot = Math.floor(st.now / SLOT);
+    st.now = t;
+    let changed = Math.floor(t / SLOT) !== prevSlot;
+    while (st.genClock + 60 <= t) { st.genClock += 60; const k = poisson(rate(st.genClock)); for (let i = 0; i < k; i++) walkIn(); if (k) changed = true; }
+    for (const o of st.orders) {
+      if (o.status === 'HELD' && t >= o.holdUntil) {
+        o.status = 'EXPIRED'; changed = true;
+        if (st.payOrder === o.id) st.payMsg = { kind: 'bad', text: '결제 시간(3분)이 지나 잡아둔 제조 자리가 풀렸어요. 다시 주문해 주세요.' };
       }
+      if (o.status === 'PAID') {
+        for (const tk of o.tickets) if (!tk.done && st.autoStaff && t >= tk.slot + procTime(tk)) { tk.done = true; tk.doneAt = t; changed = true; }
+        if (o.tickets.every((tk) => tk.done)) {
+          o.status = 'READY'; o.readyAt = Math.max(...o.tickets.map((tk) => tk.doneAt)); changed = true;
+          if (o.mine) st.toast = { text: `#${o.no} 음료가 준비됐어요! 픽업대에서 받아가세요.`, id: o.id };
+          else o.pickAt = Math.max(o.readyAt, o.pickup - 120) + Math.floor(st.rng() * 300);
+          addLog(`#${o.no} 준비 완료${o.readyAt > o.pickup ? ' (약속 시각 지남)' : ''}`);
+        }
+      }
+      if (o.status === 'READY' && !o.mine && t >= o.pickAt) { o.status = 'PICKED_UP'; o.pickedAt = t; changed = true; }
+    }
+    if (changed) dirty = true;
+  }
+  function advance(sec) { const end = st.now + sec; while (st.now < end) processAt(Math.min(end, st.now + 10)); }
+
+  // ───────────────────────── 고객 행동 ─────────────────────────
+  const cartTotal = () => st.cart.reduce((s, l) => s + byId[l.menuId].price * l.qty, 0);
+  const cartCount = () => st.cart.reduce((s, l) => s + l.qty, 0);
+  function addToCart(id, d) {
+    const ex = st.cart.find((l) => l.menuId === id);
+    if (ex) { ex.qty = Math.max(0, Math.min(5, ex.qty + d)); if (!ex.qty) st.cart = st.cart.filter((l) => l !== ex); }
+    else if (d > 0) st.cart.push({ menuId: id, qty: 1 });
+    st.conflict = null;
+  }
+  function placeMine() {
+    if (!st.pickSel) return;
+    const r = tryPlace(st.cart, st.pickSel, true);
+    if (!r.ok) { st.conflict = { pickup: st.pickSel, reason: r.reason, alts: r.alts }; st.pickSel = null; return; }
+    st.conflict = null; st.payOrder = r.order.id; st.payMsg = null; st.route = 'pay';
+  }
+  function payMine() {
+    const o = st.orders.find((x) => x.id === st.payOrder); if (!o || o.status !== 'HELD') return;
+    const pts = st.usePoints ? Math.min(st.points, o.total) : 0;
+    if (pts) { st.points -= pts; st.pointLog.unshift({ t: st.now, amt: -pts, memo: `#${o.no} 주문 결제` }); }
+    if (st.payCard === 'declined' && o.total - pts > 0) {
+      if (pts) { st.points += pts; st.pointLog.unshift({ t: st.now, amt: pts, memo: `#${o.no} 카드 승인 실패로 사용 취소` }); }
+      o.status = 'FAILED';
+      st.payMsg = { kind: 'bad', text: `카드 승인이 거절됐어요 (잔액 부족).${pts ? ' 사용한 포인트 ' + pts.toLocaleString() + 'P는 돌려드렸어요.' : ''} 잡아둔 제조 자리도 풀었어요.` };
+      addLog(`#${o.no} 앱 주문 카드 승인 실패 → 포인트 복원 · 제조 자리 반환`);
+      return;
+    }
+    o.status = 'PAID'; o.paidAt = st.now; o.pay = { card: o.total - pts, points: pts };
+    addLog(`#${o.no} 앱 주문 결제 완료 · ${hhmm(o.pickup)} 픽업 · ${itemsText(o.items)}`);
+    st.cart = []; st.pickSel = null; st.payOrder = null; st.viewOrder = o.id; st.route = 'order';
+  }
+  function cancelHold() { const o = st.orders.find((x) => x.id === st.payOrder); if (o && o.status === 'HELD') o.status = 'EXPIRED'; st.payOrder = null; st.payMsg = null; st.route = 'checkout'; }
+  function cancelMine(o) {
+    if (!o || o.status !== 'PAID' || st.now >= firstSlot(o)) return;
+    o.status = 'CANCELLED';
+    if (o.pay.points) { st.points += o.pay.points; st.pointLog.unshift({ t: st.now, amt: o.pay.points, memo: `#${o.no} 주문 취소 환불` }); }
+    addLog(`#${o.no} 고객 취소 · 카드 ${won(o.pay.card)} 승인 취소`);
+  }
+  function pickupMine(o) {
+    if (!o || o.status !== 'READY') return;
+    o.status = 'PICKED_UP'; o.pickedAt = st.now;
+    const earn = Math.floor((o.pay.card * 0.05) / 10) * 10;
+    if (earn) { st.points += earn; st.pointLog.unshift({ t: st.now, amt: earn, memo: `#${o.no} 적립 (카드 결제액 5%)` }); }
+    if (st.toast && st.toast.id === o.id) st.toast = null;
+    addLog(`#${o.no} 픽업 완료`);
+  }
+
+  // ───────────────────────── 고객 앱 화면 ─────────────────────────
+  const STATUS_PILL = {
+    HELD: ['acc', '결제 대기'], PAID: ['acc', '접수됨'], READY: ['good', '픽업 대기'], PICKED_UP: ['', '픽업 완료'],
+    CANCELLED: ['', '취소됨'], EXPIRED: ['', '시간 만료'], FAILED: ['bad', '결제 실패'],
+  };
+  const orderStage = (o) => (o.status === 'PAID' ? (st.now >= firstSlot(o) ? 'MAKING' : 'WAIT') : o.status);
+  const until = (t) => `<span class="num" data-until="${t}"></span>`;
+  const fmtLeft = (sec) => (sec <= 0 ? '0:00' : Math.floor(sec / 60) + ':' + pad(Math.floor(sec % 60)));
+  function slotLevel(pickup, u) { const p = S.loadPercentBefore(pickup, u); return p < 50 ? ['lv-ok', '여유'] : p < 85 ? ['lv-mid', '보통'] : ['lv-busy', '혼잡']; }
+
+  function renderPhone() {
+    const r = st.route;
+    const back = (to) => `<button class="back" data-go="${to}" aria-label="뒤로">‹</button>`;
+    const ptsPill = `<span class="pts num">${st.points.toLocaleString()}P</span>`;
+    let h = '', b = '';
+    if (r === 'menu') {
+      h = `<div><h2>BrewSlot 성수역점</h2><div class="sub">${st.accepting ? '영업 중 · 받을 시각에 맞춰 만들어 드려요' : '지금은 주문을 받지 않아요'}</div></div>${ptsPill}`;
+      if (!st.accepting) b += `<div class="banner warn">매장 사정으로 잠시 주문 접수를 멈췄어요.</div>`;
+      b += `<div class="chips" role="group" aria-label="분류">${CATS.map(([k, n]) => `<button class="chip" data-cat="${k}" aria-pressed="${st.cat === k}">${n}</button>`).join('')}</div>`;
+      b += `<ul class="menu-list">${MENU.filter((m) => st.cat === 'all' || m.cat === st.cat).map((m) => {
+        const inCart = st.cart.find((l) => l.menuId === m.id); const out = st.soldOut.has(m.id);
+        const ctl = out ? '<span class="pill">품절</span>'
+          : inCart ? `<div class="stepper"><button data-cart="${m.id}" data-d="-1" aria-label="빼기">−</button><span class="num">${inCart.qty}</span><button data-cart="${m.id}" data-d="1" aria-label="더하기">+</button></div>`
+          : `<button class="add" data-cart="${m.id}" data-d="1">담기</button>`;
+        return `<li class="menu-item${out ? ' out' : ''}"><div class="thumb">${m.icon}</div><div class="grow"><div class="nm">${m.name}</div><div class="desc">${m.desc}</div><div class="pr num">${won(m.price)}</div></div>${ctl}</li>`;
+      }).join('')}</ul>`;
+      if (cartCount()) b += `<div class="cartbar"><button class="primary" data-go="checkout"><span>${cartCount()}잔 · 받을 시간 고르기</span><span class="num">${won(cartTotal())}</span></button></div>`;
+    } else if (r === 'checkout') {
+      h = `${back('menu')}<h2>주문 확인</h2>${ptsPill}`;
+      if (!st.cart.length) b = `<div class="empty">장바구니가 비었어요.<br><br><button class="secondary" data-go="menu" style="width:auto">메뉴 보러 가기</button></div>`;
+      else {
+        b += st.cart.map((l) => { const m = byId[l.menuId]; return `<div class="line-row"><div class="thumb" style="width:40px;height:40px;font-size:18px">${m.icon}</div><div class="grow"><b>${m.name}</b><div class="num" style="color:var(--muted);font-size:12px">${won(m.price * l.qty)}</div></div><div class="stepper"><button data-cart="${m.id}" data-d="-1" aria-label="빼기">−</button><span class="num">${l.qty}</span><button data-cart="${m.id}" data-d="1" aria-label="더하기">+</button></div></div>`; }).join('');
+        const u = usage(); const ds = demandsOf(st.cart); const e = earliest();
+        const blocked = !st.accepting || st.cart.some((l) => st.soldOut.has(l.menuId));
+        const cands = candidates().map((t) => ({ t, ok: !blocked && S.schedule(t, ds, u, e).feasible }));
+        if (st.pickSel && !cands.find((c) => c.t === st.pickSel && c.ok)) st.pickSel = null;
+        if (st.conflict) {
+          const c = st.conflict;
+          const why = c.reason === 'EXCEEDS_SLOT_CAPACITY' ? '한 번에 만들 수 있는 양보다 많아요. 수량을 나눠서 주문해 주세요.'
+            : c.reason === 'CLOSED' ? '지금은 주문을 받지 않아요.' : c.reason === 'SOLD_OUT' ? '품절된 메뉴가 있어요.'
+            : `그 사이 주문이 몰려 ${hhmm(c.pickup)} 픽업은 마감됐어요.${c.alts.length ? ' 이 시간은 가능해요:' : ''}`;
+          b += `<div class="banner bad" role="alert" style="margin-top:12px">${why}${c.alts.length ? `<div style="margin-top:8px" class="chips">${c.alts.map((t) => `<button class="chip" data-alt="${t}">${hhmm(t)}로 주문</button>`).join('')}</div>` : ''}</div>`;
+        }
+        if (blocked) b += `<div class="banner warn" style="margin-top:12px">${st.accepting ? '품절된 메뉴를 빼 주세요.' : '매장 사정으로 잠시 주문 접수를 멈췄어요.'}</div>`;
+        b += `<div class="section-h">언제 받으시겠어요? <small>고른 시각에 맞춰 만들기 시작해요</small></div>`;
+        b += `<div class="slots">${cands.map((c) => { const [cls, lv] = c.ok ? slotLevel(c.t, u) : ['', '마감']; return `<button class="slot num" data-pick="${c.t}" ${c.ok ? '' : 'disabled'} aria-pressed="${st.pickSel === c.t}"><b>${hhmm(c.t)}</b><span class="${cls}">${lv}</span></button>`; }).join('')}</div>`;
+        if (!blocked && !cands.some((c) => c.ok)) b += `<div class="banner warn" style="margin-top:10px">한 시간 안에 받을 수 있는 시간이 없어요. 수량을 줄여 보세요.</div>`;
+        b += `<div style="margin-top:14px"><div class="kv total"><span>합계</span><span class="num">${won(cartTotal())}</span></div></div>`;
+        b += `<div class="cartbar"><button class="primary" data-act="place" ${st.pickSel ? '' : 'disabled'}><span>${st.pickSel ? hhmm(st.pickSel) + '에 받기' : '받을 시간을 골라주세요'}</span><span class="num">${won(cartTotal())}</span></button></div>`;
+      }
+    } else if (r === 'pay') {
+      const o = st.orders.find((x) => x.id === st.payOrder);
+      if (!o) { st.route = 'menu'; return renderPhone(); }
+      h = `<h2>결제</h2>${ptsPill}`;
+      if (st.payMsg) {
+        b += `<div class="banner ${st.payMsg.kind}" role="alert">${st.payMsg.text}</div><button class="primary" data-act="retry"><span>다시 주문하기</span><span>›</span></button>`;
+      } else {
+        const pts = st.usePoints ? Math.min(st.points, o.total) : 0;
+        b += `<div class="hold"><div class="cd num" data-hold="${o.holdUntil}">${fmtLeft(o.holdUntil - st.now)}</div><div class="t">${hhmm(o.pickup)} 픽업 자리를 잡아뒀어요. 시간 안에 결제해 주세요.</div></div>`;
+        b += o.items.map((l) => `<div class="kv"><span>${byId[l.menuId].name} × ${l.qty}</span><span class="num">${won(byId[l.menuId].price * l.qty)}</span></div>`).join('');
+        b += `<div class="section-h">포인트</div><button class="toggle" data-act="points" role="switch" aria-checked="${st.usePoints}"><span>보유 <b class="num">${st.points.toLocaleString()}P</b> 사용</span><span class="sw"></span></button>`;
+        b += `<div class="section-h">결제 카드</div>${CARDS.map((c) => `<button class="card-opt" data-card="${c.id}" aria-pressed="${st.payCard === c.id}"><span class="cc${c.red ? ' red' : ''}"></span><span><b>${c.name}</b> <span class="num">${c.no}</span>${c.note ? `<div style="font-size:12px;color:var(--muted)">${c.note}</div>` : ''}</span></button>`).join('')}`;
+        b += `<div style="margin-top:10px"><div class="kv"><span class="m">주문 금액</span><span class="num">${won(o.total)}</span></div><div class="kv"><span class="m">포인트 사용</span><span class="num">−${won(pts)}</span></div><div class="kv total"><span>카드 결제</span><span class="num">${won(o.total - pts)}</span></div></div>`;
+        b += `<button class="secondary" data-act="cancelHold" style="margin-top:14px">주문 취소</button>`;
+        b += `<div class="cartbar"><button class="primary" data-act="pay"><span>결제하기</span><span class="num">${won(o.total - pts)}</span></button></div>`;
+      }
+    } else if (r === 'order') {
+      const o = st.orders.find((x) => x.id === st.viewOrder);
+      h = `${back('orders')}<h2>주문 상세</h2>${ptsPill}`;
+      const stg = orderStage(o); const fs = firstSlot(o);
+      const msg = {
+        WAIT: [`${hhmm(o.pickup)}에 받으실 수 있어요`, `음료가 식지 않도록 ${hhmm(fs)}부터 만들어요 · ${until(fs)} 남음`],
+        MAKING: ['만들고 있어요', `${hhmm(o.pickup)}까지 준비해 드릴게요`],
+        READY: ['준비됐어요! 픽업대에서 받아가세요', o.readyAt <= o.pickup ? `약속한 ${hhmm(o.pickup)}보다 먼저 준비됐어요` : '약속 시각보다 늦어져 죄송해요'],
+        PICKED_UP: ['맛있게 드세요', `${hhmm(o.pickedAt)} 픽업`],
+        CANCELLED: ['주문이 취소됐어요', '카드 승인 취소와 포인트 환불이 끝났어요'],
+      }[stg];
+      b += `<div class="bignum"><span class="pill acc">주문번호</span><div class="no num">#${o.no}</div><div class="msg">${msg[0]}</div><div class="msg2">${msg[1]}</div></div>`;
+      if (stg !== 'CANCELLED') {
+        const steps = [
+          ['결제 완료', hhmm(o.paidAt), true],
+          ['제조 시작', st.now >= fs ? hhmm(fs) : hhmm(fs) + ' 예정', st.now >= fs],
+          ['준비 완료', o.readyAt ? hhmm(o.readyAt) : hhmm(o.pickup) + ' 전까지', !!o.readyAt],
+          ['픽업', o.pickedAt ? hhmm(o.pickedAt) : '', !!o.pickedAt],
+        ];
+        const cur = steps.findIndex((s) => !s[2]);
+        b += `<ol class="track">${steps.map((s, i) => `<li class="${s[2] ? 'done' : i === cur ? 'now' : ''}"><span class="b">${s[2] ? '✓' : ''}</span><div><div class="tt">${s[0]}</div><div class="ts num">${s[1]}</div></div></li>`).join('')}</ol>`;
+      }
+      b += `<div class="section-h">주문 내역</div>${o.items.map((l) => `<div class="kv"><span>${byId[l.menuId].name} × ${l.qty}</span><span class="num">${won(byId[l.menuId].price * l.qty)}</span></div>`).join('')}`;
+      b += `<div class="kv"><span class="m">포인트 사용</span><span class="num">−${won(o.pay.points)}</span></div><div class="kv total"><span>카드 결제</span><span class="num">${won(o.pay.card)}</span></div>`;
+      if (stg === 'READY') b += `<div class="cartbar"><button class="primary" data-act="pickup" data-id="${o.id}"><span>음료를 받았어요</span><span>✓</span></button></div>`;
+      else if (stg === 'WAIT') b += `<button class="secondary" data-act="cancel" data-id="${o.id}" style="margin-top:16px">주문 취소 · 만들기 시작 전까지 가능</button>`;
+      else if (stg === 'PICKED_UP' || stg === 'CANCELLED') b += `<button class="secondary" data-act="reorder" data-id="${o.id}" style="margin-top:16px">같은 메뉴 다시 주문하기</button>`;
+    } else if (r === 'orders') {
+      h = `<h2>주문내역</h2>${ptsPill}`;
+      const mine = st.orders.filter((o) => o.mine && !['HELD', 'EXPIRED', 'FAILED'].includes(o.status)).reverse();
+      b = mine.length ? mine.map((o) => { const [c, t] = orderStage(o) === 'MAKING' ? ['warn', '만드는 중'] : STATUS_PILL[o.status]; return `<button class="order-card" data-open="${o.id}"><div class="row"><b class="num">#${o.no} · ${hhmm(o.pickup)} 픽업</b><span class="pill ${c}">${t}</span></div><div style="color:var(--ink2);font-size:13px;margin-top:4px">${itemsText(o.items)}</div><div class="num" style="color:var(--muted);font-size:12px">${won(o.total)}</div></button>`; }).join('')
+        : `<div class="empty">아직 주문이 없어요.<br><br><button class="secondary" data-go="menu" style="width:auto">메뉴 보러 가기</button></div>`;
+    } else if (r === 'me') {
+      h = `<div><h2>내 정보</h2><div class="sub">김브루 님</div></div>`;
+      b += `<div class="mebox"><div style="font-size:13px;opacity:.85">사용 가능한 포인트</div><div class="p num">${st.points.toLocaleString()}P</div><div style="font-size:12px;opacity:.85">음료를 받으면 카드 결제액의 5%를 적립해 드려요</div></div>`;
+      b += `<div class="section-h">포인트 내역</div>${st.pointLog.map((p) => `<div class="kv"><span><span class="m num">${hhmm(p.t)}</span> ${p.memo}</span><span class="num" style="color:${p.amt > 0 ? 'var(--good)' : 'var(--ink)'};font-weight:700">${p.amt > 0 ? '+' : ''}${p.amt.toLocaleString()}P</span></div>`).join('')}`;
+    }
+    if (st.toast && !(r === 'order' && st.viewOrder === st.toast.id)) b = `<div class="toast" role="status"><span>🔔</span><span>${st.toast.text}</span><button data-open="${st.toast.id}">보기</button></div>` + b;
+    const body = $('phBody'); const keep = body.dataset.route === r ? body.scrollTop : 0;
+    $('phHead').innerHTML = h; body.innerHTML = b; body.dataset.route = r; body.scrollTop = keep;
+    const nav = r === 'checkout' || r === 'pay' ? 'menu' : r === 'order' ? 'orders' : r;
+    const hasActive = st.orders.some((o) => o.mine && (o.status === 'PAID' || o.status === 'READY'));
+    $('phNav').querySelectorAll('button').forEach((x) => {
+      if (x.dataset.nav === nav) x.setAttribute('aria-current', 'page'); else x.removeAttribute('aria-current');
+      const dot = x.querySelector('.dot');
+      if (x.dataset.nav === 'orders' && hasActive && !dot) x.insertAdjacentHTML('beforeend', '<span class="dot"></span>');
+      if (dot && !hasActive) dot.remove();
     });
-    $('board').innerHTML = html;
   }
-  function place() {
-    const d = demandsOf(cart), r = S.schedule(selected, d, usage, now);
-    if (r.feasible) {
-      add(r.allocations, 1); lastAlloc = new Set(r.allocations.map((a) => a.station + '@' + a.slot));
-      const o = newOrder(cart, selected, r.allocations, 'PENDING_PAYMENT', { mine: true });
-      activeId = o.id; screen = 'track'; renderApp();
-    } else {
-      lastAlloc = new Set();
-      const alts = S.nearestAlternatives(selected, candidates(), d, usage, now);
-      renderOrderScreen(`<div class="result bad"><span class="code">${hhmm(selected)} 은 어려워요</span><span>${REASON[r.reason]} (${LABEL[r.bottleneck]})</span>
-        ${alts.length ? `<span>이 시각은 어떠세요?</span><div class="alts">${alts.map((t) => `<button data-t="${t}">${hhmm(t)}</button>`).join('')}</div>` : '<span>1시간 안에 가능한 시각이 없어요.</span>'}</div>`);
-      renderBoard();
-    }
-  }
-  function pay() {
-    const o = orders.find((x) => x.id === activeId);
-    const usePts = $('usePts') && $('usePts').checked ? Math.min(wallet, o.total) : 0;
-    const declined = $('cardNo') && $('cardNo').checked;
-    o.status = 'PAYING'; renderApp();
-    const log = [];
-    const step = (text, fn, delay) => setTimeout(() => { if (fn) fn(); log.push(text); o.payLog = log.join('<br>'); renderApp(); }, delay);
-    let t = 350;
-    if (usePts) { step(`포인트 ${usePts.toLocaleString()}P 차감 (만료 임박분부터)`, () => { wallet -= usePts; }, t); t += 450; }
-    if (declined) {
-      step('카드 승인 거절 (CARD_DECLINED)', null, t); t += 450;
-      step('주문 취소 · 슬롯 반환' + (usePts ? ` · 포인트 ${usePts.toLocaleString()}P 복원` : ''), () => { o.status = 'CANCELLED'; o.cancelReason = '카드 거절'; add(o.allocs, -1); wallet += usePts; }, t);
-    } else {
-      const card = o.total - usePts;
-      step(card ? `카드 ${won(card)} 승인` : '카드 결제 없음 (포인트 전액)', () => { o.card = card; o.points = usePts; }, t); t += 450;
-      step('결제 완료 · 슬롯 확정', () => {
-        o.status = now >= o.first ? 'PREPARING' : 'PAID';
-        if (card) { o.pgTx = 'pg_' + o.id; pgFile.push({ tx: o.pgTx, order: o.id, amount: card, fee: fee(card) }); }
-      }, t);
-    }
-  }
-  $('screen').addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.id && b.dataset.d) {
-      const id = b.dataset.id; cart[id] = Math.max(0, Math.min(6, (cart[id] || 0) + Number(b.dataset.d))); if (!cart[id]) delete cart[id];
-      lastAlloc = new Set(); renderApp(); return;
-    }
-    if (b.dataset.t) { selected = Number(b.dataset.t); lastAlloc = new Set(); renderApp(); return; }
-    const act = b.dataset.act;
-    if (act === 'place') place();
-    if (act === 'pay') pay();
-    if (act === 'back') { screen = 'order'; activeId = null; renderApp(); }
-    if (act === 'reorder') {
-      const o = orders.find((x) => x.id === Number(b.dataset.id)); cart = { ...o.cart };
-      const d = demandsOf(cart); selected = candidates().find((t) => S.schedule(t, d, usage, now).feasible) || selected; renderApp();
-    }
+
+  $('phNav').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-nav]'); if (!b) return;
+    if (st.route === 'pay' && !st.payMsg) cancelHold();
+    st.route = b.dataset.nav; st.conflict = null; renderAll();
+  });
+  $('phHead').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) { st.route = b.dataset.go; renderAll(); } });
+  $('phBody').addEventListener('click', (e) => {
+    const el = e.target.closest('button'); if (!el) return; const d = el.dataset;
+    if (d.cat) st.cat = d.cat;
+    else if (d.cart) addToCart(Number(d.cart), Number(d.d));
+    else if (d.go) st.route = d.go;
+    else if (d.pick) st.pickSel = Number(d.pick);
+    else if (d.alt) { st.pickSel = Number(d.alt); st.conflict = null; placeMine(); }
+    else if (d.card) st.payCard = d.card;
+    else if (d.open) { st.viewOrder = d.open; st.route = 'order'; if (st.toast && st.toast.id === d.open) st.toast = null; }
+    else if (d.act === 'place') placeMine();
+    else if (d.act === 'points') st.usePoints = !st.usePoints;
+    else if (d.act === 'pay') payMine();
+    else if (d.act === 'cancelHold') cancelHold();
+    else if (d.act === 'retry') { st.payOrder = null; st.payMsg = null; st.route = 'checkout'; }
+    else if (d.act === 'cancel') cancelMine(st.orders.find((o) => o.id === d.id));
+    else if (d.act === 'pickup') pickupMine(st.orders.find((o) => o.id === d.id));
+    else if (d.act === 'reorder') { st.cart = st.orders.find((o) => o.id === d.id).items.map((l) => ({ ...l })); st.pickSel = null; st.conflict = null; st.route = 'checkout'; }
+    else return;
+    renderAll();
   });
 
-  // ───────── ③ 매장 운영 ─────────
-  const STATUS = { PENDING_PAYMENT: ['결제 대기', 'neutral'], PAYING: ['결제 중', 'neutral'], PAID: ['결제 완료', 'neutral'], PREPARING: ['제조 중', 'warn'],
-    READY: ['준비 완료', 'ok'], PICKED_UP: ['픽업 완료', 'ok'], CANCELLED: ['취소', 'bad'], EXPIRED: ['점유 만료', 'bad'] };
-  function renderStore() {
-    if (!orders) return;
-    $('clockNow2').textContent = hhmm(now);
-    const live = orders.filter((o) => !['CANCELLED', 'EXPIRED'].includes(o.status));
-    const paid = live.filter((o) => o.status !== 'PENDING_PAYMENT' && o.status !== 'PAYING');
-    const ready = paid.filter((o) => o.readyAt);
-    const kept = ready.filter((o) => o.readyAt <= o.promise).length;
+  // ───────────────────────── 매장 화면 ─────────────────────────
+  function renderKpis() {
+    const paid = st.orders.filter((o) => ['PAID', 'READY', 'PICKED_UP'].includes(o.status));
+    const queue = st.orders.filter((o) => o.status === 'PAID').reduce((s, o) => s + o.tickets.filter((t) => !t.done && t.slot <= st.now).length, 0);
+    const ready = st.orders.filter((o) => o.status === 'READY').length;
+    const doneOrders = st.orders.filter((o) => o.readyAt);
+    const onTime = doneOrders.filter((o) => o.readyAt <= o.pickup).length;
+    const rateTxt = doneOrders.length ? Math.round((onTime * 100) / doneOrders.length) + '<small>%</small>' : '—';
     $('kpis').innerHTML = [
-      [paid.length + '건', '결제 완료 주문'], [won(paid.reduce((s, o) => s + o.total, 0)), '매출'],
-      [ready.length ? Math.round((kept / ready.length) * 100) + '%' : '-', '약속 준수율 (준비 완료 기준)'], [hhmm(now), '매장 시계'],
-    ].map(([b, s]) => `<div class="kpi"><b>${b}</b><span>${s}</span></div>`).join('');
-    const slots = [now, now + SLOT];
-    $('queue').innerHTML = slots.map((s, i) => {
-      const items = paid.filter((o) => o.status === 'PAID' || o.status === 'PREPARING').flatMap((o) => o.allocs.filter((a) => a.slot === s).map((a) => ({ o, a })));
-      const drinks = items.map(({ o, a }) => {
-        const names = Object.entries(o.cart).filter(([id]) => byId[id].station === a.station).map(([id, q]) => `${byId[id].short}×${q}`).join(' ');
-        return `<li>#${o.id} ${names} <span class="muted">· ${LABEL[a.station]} · ${hhmm(o.promise)} 픽업</span></li>`;
-      }).join('');
-      return `<div class="qslot ${i === 0 ? 'cur' : ''}"><div class="qh"><span>${i === 0 ? '지금' : '다음'} · ${hhmm(s)}~${hhmm(s + SLOT)} 슬롯</span><span class="muted">${items.length}건</span></div>
-        ${drinks ? `<ul>${drinks}</ul>` : '<span class="muted" style="font-size:.84rem">만들 음료 없음</span>'}</div>`;
-    }).join('');
-    $('sliders').innerHTML = S.STATIONS.map((st) => `<div class="slider"><label for="cap-${st}"><span class="st"><i style="background:${COLOR[st]}"></i>${LABEL[st]}</span></label>
-      <input type="range" id="cap-${st}" min="0" max="10" value="${stationCap[st]}" data-st="${st}"><b class="mono">${stationCap[st]}/5분</b></div>`).join('');
-    $('orderRows').innerHTML = orders.slice().reverse().map((o) => {
-      const [label, tone] = STATUS[o.status];
-      const kept = o.readyAt ? (o.readyAt <= o.promise ? `<span class="pill ok">${hhmm(o.readyAt)} ✓ 제시간</span>` : `<span class="pill bad">${hhmm(o.readyAt)} 늦음</span>`) : '<span class="muted">-</span>';
-      return `<tr><td class="mono">#${o.id}${o.mine ? ' <span class="pill neutral">내 주문</span>' : ''}</td><td>${cartText(o.cart)}</td><td class="mono">${hhmm(o.promise)}</td><td><span class="pill ${tone}">${label}</span></td><td>${kept}</td></tr>`;
-    }).join('');
+      ['지금 만들 주문', queue + '<small>건</small>'], ['픽업 대기', ready + '<small>건</small>'], ['오늘 주문', paid.length + '<small>건</small>'],
+      ['약속 시각 지킴', rateTxt + ` <small>${onTime}/${doneOrders.length}</small>`], ['시간 안 맞아 떠난 손님', st.lost + '<small>명</small>'],
+    ].map(([l, v]) => `<div class="kpi"><div class="l">${l}</div><div class="v num">${v}</div></div>`).join('');
   }
-  $('sliders').addEventListener('input', (e) => {
-    const i = e.target.closest('input[data-st]'); if (!i) return;
-    stationCap[i.dataset.st] = Number(i.value); i.nextElementSibling.textContent = i.value + '/5분';
-    renderBoard(); if (screen === 'order') renderOrderScreen();
-  });
-  $('sliders').addEventListener('change', renderStore);
-
-  // ───────── ④ 결제 · 정산 ─────────
-  function fee(amount) { return Math.round(amount * 0.022); } // 2.2% 반올림 (양수 금액)
-  function renderMoney() {
-    if (!orders) return;
-    const paid = orders.filter((o) => ['PAID', 'PREPARING', 'READY', 'PICKED_UP'].includes(o.status));
-    const card = paid.reduce((s, o) => s + o.card, 0), points = paid.reduce((s, o) => s + o.points, 0);
-    const pgFee = paid.filter((o) => o.card).reduce((s, o) => s + fee(o.card), 0);
-    const onceFee = Math.round(card * 0.022);
-    const net = card + points, platform = Math.floor(net * 0.01);
-    $('stmt').innerHTML = `
-      <div><span>카드 매출 (${paid.filter((o) => o.card).length}건)</span><b>${won(card)}</b></div>
-      <div><span>포인트 매출 <span class="muted">(브랜드 부담 · 매장에 지급)</span></span><b>${won(points)}</b></div>
-      <div><span>순매출</span><b>${won(net)}</b></div>
-      <div><span>− PG 수수료 <span class="muted">(건별 반올림 합${onceFee !== pgFee ? `, 합계에 곱하면 ${won(onceFee)}` : ''})</span></span><b>${won(pgFee)}</b></div>
-      <div><span>− 플랫폼 수수료 1%</span><b>${won(platform)}</b></div>
-      <div><span>매장 지급액</span><b>${won(net - pgFee - platform)}</b></div>`;
+  function ticketHtml(o, tk) {
+    const started = st.now >= tk.slot; const late = started && st.now >= tk.slot + SLOT;
+    const tag = o.mine ? ' · 내 주문' : '';
+    return `<div class="tk ${late ? 'late' : started ? 'now' : ''}${o.mine ? ' mine' : ''}"><div class="h"><span class="no num">#${o.no}</span><span class="pk num">${hhmm(o.pickup)} 픽업${tag}</span></div>
+      <ul>${tk.lines.map((l) => `<li>${byId[l.menuId].name}${l.qty > 1 ? ` <b>×${l.qty}</b>` : ''}</li>`).join('')}</ul>
+      <div class="act"><small class="num">${started ? (late ? '늦어지고 있어요' : `${hhmm(tk.slot + SLOT)}까지 완성`) : `${hhmm(tk.slot)}에 시작`}</small>${started ? `<button class="done-btn" data-done="${o.id}|${tk.station}|${tk.slot}">완료</button>` : ''}</div></div>`;
   }
-  $('ghost').addEventListener('click', () => { pgFile.push({ tx: 'pg_ghost_' + (pgFile.length + 1), order: null, amount: 7000, fee: fee(7000) }); $('reconOut').textContent = 'PG 파일에 우리 원장에 없는 7,000원 승인 1건을 넣었습니다. 대사를 실행해 보세요.'; });
-  $('mismatch').addEventListener('click', () => { const l = pgFile.find((x) => x.order); if (l) { l.amount += 500; l.fee = fee(l.amount); } $('reconOut').textContent = 'PG 파일의 한 거래 금액을 500원 바꿨습니다. 대사를 실행해 보세요.'; });
-  $('recon').addEventListener('click', () => {
-    const ledger = orders.filter((o) => o.pgTx && ['PAID', 'PREPARING', 'READY', 'PICKED_UP'].includes(o.status)).map((o) => ({ tx: o.pgTx, amount: o.card, fee: fee(o.card) }));
-    const L = Object.fromEntries(ledger.map((x) => [x.tx, x])), P = Object.fromEntries(pgFile.map((x) => [x.tx, x]));
-    const issues = []; let matched = 0;
-    pgFile.forEach((p) => { const l = L[p.tx]; if (!l) issues.push(['MISSING_IN_LEDGER', p.tx, `PG ${won(p.amount)} — 고객 돈은 나갔는데 주문 기록이 없음`]);
-      else if (l.amount !== p.amount) issues.push(['AMOUNT_MISMATCH', p.tx, `원장 ${won(l.amount)} ≠ PG ${won(p.amount)}`]); else matched++; });
-    ledger.filter((l) => !P[l.tx]).forEach((l) => issues.push(['MISSING_IN_PG', l.tx, `원장 ${won(l.amount)}`]));
-    $('reconOut').innerHTML = `<div class="row" style="margin-bottom:6px"><span class="pill neutral">PG ${pgFile.length}건</span><span class="pill neutral">원장 ${ledger.length}건</span><span class="pill ok">일치 ${matched}건</span><span class="pill ${issues.length ? 'bad' : 'ok'}">이슈 ${issues.length}건</span></div>` +
-      (issues.length ? issues.map(([t, tx, m]) => `<div><span class="pill bad">${t}</span> <span class="mono">${tx}</span> ${m}</div>`).join('') : '<span style="color:var(--ok)">불일치 없음 — 원장과 PG 파일이 1원 단위까지 일치합니다.</span>');
-  });
-
-  let scen = 'ok', pts = 2000, sagaTimer = null;
-  function sagaSteps(s, p) {
-    const card = 16000 - p;
-    const st = [['order', '주문 생성 — 제조 슬롯을 5분간 임시 점유', 'POST /orders → 201', { order: 'PENDING_PAYMENT', slot: 'HELD' }],
-      ['order', '결제 요청 접수, Saga 시작', 'POST /orders/{id}/payment → 202', { order: 'PAYMENT_IN_PROGRESS' }]];
-    if (p) st.push(['order', '포인트 차감 명령 발행 (Outbox)', 'RedeemPoints'], ['loyalty', `만료 임박 lot 부터 ${p.toLocaleString()}P 차감 · 복식부기 분개`, 'PointsRedeemed', { pts: 3000 - p }]);
-    st.push(['order', `카드 ${won(card)} 결제 명령 발행`, 'ChargePayment'], ['payment', 'PG 승인 요청 — DB 트랜잭션 밖에서 호출', 'REQUESTED']);
-    if (s === 'ok') st.push(['pg', '승인', 'approve ✓'], ['payment', '결제 확정', 'CAPTURED · PaymentCaptured', { card }], ['order', '슬롯 확정, 주문 결제 완료', 'OrderPaid', { order: 'PAID', slot: 'CONFIRMED' }, 'good']);
-    if (s === 'declined') {
-      st.push(['pg', '거절: CARD_DECLINED', 'decline ✗', null, 'bad'], ['payment', '결제 실패', 'FAILED · PaymentFailed'], ['order', '주문 취소, 슬롯 반환', 'OrderCancelled', { order: 'CANCELLED', slot: 'RELEASED' }]);
-      if (p) st.push(['order', '보상: 포인트 차감 취소 명령', 'ReverseRedemption'], ['loyalty', '차감했던 바로 그 lot 으로 복원', 'PointsRedemptionReversed', { pts: 3000 }, 'good']);
-      else st.push(['order', '되돌릴 단계 없음 — 청구 0원', '', null, 'good']);
+  function renderStore() {
+    renderKpis();
+    document.querySelectorAll('#storeTabs [role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === st.storeTab)));
+    let h = '';
+    if (st.storeTab === 'kds') {
+      h += `<div class="bar-row"><button class="toggle" style="width:auto" data-sact="auto" role="switch" aria-checked="${st.autoStaff}"><span>바리스타 자동 처리</span><span class="sw"></span></button><span class="hint">끄면 직접 [완료]를 눌러야 음료가 나가요.</span></div>`;
+      h += `<div class="kds">`;
+      const horizon = st.now + SLOT * 2;
+      for (const s of S.STATIONS) {
+        const items = [];
+        for (const o of st.orders) if (o.status === 'PAID') for (const tk of o.tickets) if (tk.station === s && !tk.done && tk.slot < horizon) items.push([o, tk]);
+        items.sort((a, b) => a[1].slot - b[1].slot || a[0].pickup - b[0].pickup);
+        const nowItems = items.filter(([, tk]) => tk.slot <= st.now); const next = items.filter(([, tk]) => tk.slot > st.now);
+        h += `<div class="lane"><h3><i style="background:${STATION[s].color}"></i>${STATION[s].name}<span class="c num">${nowItems.length}</span></h3>
+          <div class="grp">지금 만들기</div>${nowItems.map(([o, tk]) => ticketHtml(o, tk)).join('') || '<div class="none">없음</div>'}
+          <div class="grp">다음 순서</div>${next.map(([o, tk]) => ticketHtml(o, tk)).join('') || '<div class="none">없음</div>'}</div>`;
+      }
+      const ready = st.orders.filter((o) => o.status === 'READY').sort((a, b) => a.pickup - b.pickup);
+      h += `<div class="lane"><h3><i style="background:var(--good)"></i>픽업대<span class="c num">${ready.length}</span></h3>${ready.map((o) => `<div class="tk${o.mine ? ' mine' : ''}"><div class="h"><span class="no num">#${o.no}</span><span class="pk num">${hhmm(o.pickup)} 픽업${o.mine ? ' · 내 주문' : ''}</span></div><ul><li>${itemsText(o.items)}</li></ul><div class="act"><small class="num">${hhmm(o.readyAt)} 준비${o.readyAt > o.pickup ? ' · 지연' : ''}</small><button class="handoff" data-hand="${o.id}">전달</button></div></div>`).join('') || '<div class="none">없음</div>'}</div>`;
+      h += `</div>`;
+      h += `<div class="log" aria-label="매장 알림">${st.log.slice(0, 40).map((l) => `<div><b>${hhmm(l.t)}</b>${l.msg}</div>`).join('')}</div>`;
+    } else if (st.storeTab === 'slots') {
+      const u = usage(); const cols = Array.from({ length: 12 }, (_, i) => Math.floor(st.now / SLOT) * SLOT + i * SLOT);
+      h += `<div class="bar-row"><button class="toggle" style="width:auto" data-sact="accept" role="switch" aria-checked="${st.accepting}"><span>주문 받기</span><span class="sw"></span></button><span class="hint">칸 = 그 5분 동안 잡힌 제조량 / 만들 수 있는 양. 가득 찬 시간은 고객 앱에서 마감으로 보여요.</span></div>`;
+      h += `<div class="tbl-wrap"><table class="grid-cap"><thead><tr><th style="text-align:left">제조 스테이션</th><th>5분당 용량</th>${cols.map((c, i) => `<th class="num${i === 0 ? ' cur' : ''}">${hhmm(c)}${i === 0 ? '<br>지금' : ''}</th>`).join('')}</tr></thead><tbody>`;
+      for (const s of S.STATIONS) {
+        h += `<tr><td style="text-align:left;font-weight:700"><span class="st-dot" style="background:${STATION[s].color}"></span>${STATION[s].name}</td>
+          <td><span class="cap-ctl"><button data-cap="${s}" data-d="-1" aria-label="${STATION[s].name} 용량 줄이기">−</button><b class="num">${st.cap[s]}</b><button data-cap="${s}" data-d="1" aria-label="${STATION[s].name} 용량 늘리기">+</button></span></td>
+          ${cols.map((c, i) => { const x = u.stateOf(s, c); const p = x.capacity ? x.reserved / x.capacity : 1; return `<td class="${i === 0 ? 'cur' : ''}"><div class="cell num${x.reserved >= x.capacity ? ' full' : ''}"><div class="fill" style="width:${Math.min(100, p * 100)}%;background:${STATION[s].color}"></div><span>${x.reserved}/${x.capacity}</span></div></td>`; }).join('')}</tr>`;
+      }
+      h += `</tbody></table></div><p class="hint" style="margin-top:10px">용량을 줄여도 이미 받은 주문은 그대로 만들고, 새 주문만 줄어든 용량으로 받아요. 아메리카노 1잔 = 1, 라떼 · 핸드드립 = 2, 스무디 = 3 만큼 차지해요.</p>`;
+    } else if (st.storeTab === 'menu') {
+      h += `<div class="tbl-wrap"><table><thead><tr><th>메뉴</th><th>제조 스테이션</th><th class="r">가격</th><th class="r">제조 부하</th><th class="r">맛있는 시간</th><th class="r">오늘 판매</th><th>판매 상태</th></tr></thead><tbody>`;
+      for (const m of MENU) {
+        const sold = st.orders.filter((o) => ['PAID', 'READY', 'PICKED_UP'].includes(o.status)).reduce((s, o) => s + o.items.filter((l) => l.menuId === m.id).reduce((a, l) => a + l.qty, 0), 0);
+        const on = !st.soldOut.has(m.id);
+        h += `<tr><td>${m.icon} <b>${m.name}</b></td><td><span class="st-dot" style="background:${STATION[m.station].color}"></span>${STATION[m.station].name}</td><td class="r num">${won(m.price)}</td><td class="r num">${m.load}</td><td class="r num">${m.fresh}분</td><td class="r num">${sold}잔</td>
+          <td><button class="toggle" style="width:auto;padding:4px 10px" data-sold="${m.id}" role="switch" aria-checked="${on}"><span>${on ? '판매 중' : '품절'}</span><span class="sw"></span></button></td></tr>`;
+      }
+      h += `</tbody></table></div><p class="hint" style="margin-top:10px">맛있는 시간 = 완성 후 픽업까지 허용하는 시간. 따뜻한 음료는 픽업 직전 5분 안에, 아이스 · 스무디 · 드립은 10분 안에 만들어요.</p>`;
+    } else if (st.storeTab === 'sales') {
+      const list = st.orders.filter((o) => o.pay && o.status !== 'FAILED');
+      const valid = list.filter((o) => o.status !== 'CANCELLED');
+      const fee = (o) => Math.round(o.pay.card * 0.022);
+      const gross = valid.reduce((s, o) => s + o.total, 0), card = valid.reduce((s, o) => s + o.pay.card, 0), pts = valid.reduce((s, o) => s + o.pay.points, 0), fees = valid.reduce((s, o) => s + fee(o), 0);
+      const refunds = list.filter((o) => o.status === 'CANCELLED').reduce((s, o) => s + o.total, 0);
+      h += `<div class="sum-grid"><div class="sum"><div class="l">매출 · ${valid.length}건</div><div class="v num">${won(gross)}</div></div><div class="sum"><div class="l">카드 / 포인트</div><div class="v num" style="font-size:15px">${won(card)} / ${won(pts)}</div></div><div class="sum"><div class="l">카드 수수료 2.2% (건별)</div><div class="v num">−${won(fees)}</div></div><div class="sum hl"><div class="l">정산 예정액 · 다음 영업일</div><div class="v num">${won(gross - fees)}</div></div></div>`;
+      if (refunds) h += `<p class="hint" style="margin:-6px 0 12px">취소 ${won(refunds)}은 매출에서 빠졌어요.</p>`;
+      h += `<div class="tbl-wrap" style="max-height:420px"><table><thead><tr><th>주문</th><th>결제</th><th>픽업</th><th>메뉴</th><th class="r">금액</th><th class="r">카드</th><th class="r">포인트</th><th class="r">수수료</th><th>상태</th></tr></thead><tbody>`;
+      h += list.slice().reverse().map((o) => { const [c, t] = STATUS_PILL[o.status]; const x = o.status === 'CANCELLED'; return `<tr${x ? ' style="color:var(--muted)"' : ''}><td class="num"><b>#${o.no}</b>${o.mine ? ' <span class="pill acc">내 주문</span>' : ''}</td><td class="num">${hhmm(o.paidAt)}</td><td class="num">${hhmm(o.pickup)}</td><td>${itemsText(o.items)}</td><td class="r num">${won(o.total)}</td><td class="r num">${won(o.pay.card)}</td><td class="r num">${won(o.pay.points)}</td><td class="r num">${x ? '0원' : won(fee(o))}</td><td><span class="pill ${c}">${t}</span></td></tr>`; }).join('');
+      h += `</tbody></table></div>`;
     }
-    if (s === 'lost-recover') st.push(['pg', 'PG 는 승인했지만 응답이 유실됨', 'timeout', null, 'warn'], ['payment', '결과를 모름 — 성공도 실패도 발행하지 않음', 'UNKNOWN'],
-      ['payment', '복구 잡: PG 거래 조회 → 승인 확인', 'lookup(orderId)'], ['payment', '결제 확정', 'CAPTURED · PaymentCaptured', { card }], ['order', '슬롯 확정, 주문 결제 완료', 'OrderPaid', { order: 'PAID', slot: 'CONFIRMED' }, 'good']);
-    if (s === 'lost-timeout') {
-      st.push(['pg', 'PG 는 승인했지만 응답이 유실됨', 'timeout', null, 'warn'], ['payment', '결과를 모름', 'UNKNOWN'],
-        ['order', 'Saga 타임아웃 — 가능한 모든 보상을 보냄 (전부 멱등)', 'RefundPayment + ReverseRedemption'], ['order', '주문 취소, 슬롯 반환', 'OrderCancelled', { order: 'CANCELLED', slot: 'RELEASED' }]);
-      if (p) st.push(['loyalty', '포인트 복원', 'PointsRedemptionReversed', { pts: 3000 }]);
-      st.push(['payment', '결과 미확정 결제에 환불 요청 예약', 'refund_requested'], ['payment', '복구 잡: 승인 확인 → 예약된 환불 즉시 실행', 'CAPTURED → REFUNDED', { card: 0 }],
-        ['order', '늦게 도착한 승인 이벤트는 무시 (Saga 종료)', 'PaymentCaptured (ignored)', null, 'good']);
+    const body = $('conBody');
+    const scrolls = [...body.querySelectorAll('.tbl-wrap, .log')].map((el) => el.scrollTop);
+    body.innerHTML = h;
+    body.querySelectorAll('.tbl-wrap, .log').forEach((el, i) => { if (scrolls[i]) el.scrollTop = scrolls[i]; });
+  }
+  $('storeTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { st.storeTab = b.dataset.tab; renderStore(); } });
+  $('conBody').addEventListener('click', (e) => {
+    const el = e.target.closest('button'); if (!el) return; const d = el.dataset;
+    if (d.sact === 'auto') st.autoStaff = !st.autoStaff;
+    else if (d.sact === 'accept') { st.accepting = !st.accepting; addLog(st.accepting ? '주문 접수 재개' : '주문 접수 일시 중지'); }
+    else if (d.cap) { st.cap[d.cap] = Math.max(0, Math.min(12, st.cap[d.cap] + Number(d.d))); addLog(`${STATION[d.cap].name} 5분당 용량 ${st.cap[d.cap]}로 변경`); }
+    else if (d.sold) { const id = Number(d.sold); if (st.soldOut.has(id)) st.soldOut.delete(id); else st.soldOut.add(id); addLog(`${byId[id].name} ${st.soldOut.has(id) ? '품절 처리' : '판매 재개'}`); }
+    else if (d.done) {
+      const [id, sta, slot] = d.done.split('|'); const o = st.orders.find((x) => x.id === id);
+      const tk = o && o.tickets.find((t) => t.station === sta && t.slot === Number(slot));
+      if (tk && !tk.done) { tk.done = true; tk.doneAt = st.now; processAt(st.now); }
     }
-    return st;
-  }
-  function runSaga() {
-    clearTimeout(sagaTimer);
-    const steps = sagaSteps(scen, pts), who = { order: '주문', loyalty: '포인트', payment: '결제', pg: 'PG사' };
-    $('steps').innerHTML = ''; $('sOrder').textContent = '-'; $('sSlot').textContent = '-'; $('sPts').textContent = '3,000P'; $('sCard').textContent = '0원';
-    let i = 0;
-    (function next() {
-      if (i >= steps.length) return;
-      const [w, msg, ev, state, tone] = steps[i++], li = document.createElement('li');
-      li.className = 'step ' + (tone || '');
-      li.innerHTML = `<span class="who ${w}">${who[w]}</span><div><div class="msg">${msg}</div>${ev ? `<div class="ev">${ev}</div>` : ''}</div>`;
-      $('steps').appendChild(li);
-      if (state) { if (state.order) $('sOrder').textContent = state.order; if (state.slot) $('sSlot').textContent = state.slot;
-        if (state.pts !== undefined) $('sPts').textContent = state.pts.toLocaleString() + 'P'; if (state.card !== undefined) $('sCard').textContent = won(state.card); }
-      sagaTimer = setTimeout(next, reduceMotion ? 0 : 380);
-    })();
-  }
-  function seg(id, attr, set) {
-    $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return;
-      $(id).querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); set(b.dataset[attr]); runSaga(); });
-  }
-  seg('scen', 's', (v) => (scen = v)); seg('pts', 'p', (v) => (pts = Number(v)));
-  $('replaySaga').addEventListener('click', runSaga);
+    else if (d.hand) { const o = st.orders.find((x) => x.id === d.hand); if (o.mine) pickupMine(o); else if (o.status === 'READY') { o.status = 'PICKED_UP'; o.pickedAt = st.now; } }
+    else return;
+    renderAll();
+  });
 
-  // ───────── init ─────────
-  renderRush();
-  resetStore();
-  runSaga();
-  if (hashTab) showTab(hashTab);
+  // ───────────────────────── 시계 · 루프 ─────────────────────────
+  function renderAll() { renderPhone(); renderStore(); dirty = false; updateLive(); }
+  function updateLive() {
+    $('clock').textContent = hhmmss(st.now); $('phClock').textContent = hhmm(st.now);
+    document.querySelectorAll('[data-until]').forEach((el) => { const s = Number(el.dataset.until) - st.now; el.textContent = s > 60 ? Math.ceil(s / 60) + '분' : Math.max(0, Math.ceil(s)) + '초'; });
+    document.querySelectorAll('[data-hold]').forEach((el) => { el.textContent = fmtLeft(Number(el.dataset.hold) - st.now); });
+  }
+  let last = performance.now(); let acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.25, (now - last) / 1000); last = now;
+    if (st.playing) { acc += dt * st.speed; const whole = Math.floor(acc); if (whole > 0) { acc -= whole; advance(whole); } }
+    if (dirty) renderAll(); else updateLive();
+    requestAnimationFrame(frame);
+  }
+
+  function setSpeedUi() {
+    $('btnPlay').textContent = st.playing ? '⏸' : '▶'; $('btnPlay').setAttribute('aria-pressed', String(!st.playing));
+    $('btnPlay').setAttribute('aria-label', st.playing ? '일시정지' : '재생');
+    document.querySelectorAll('[data-speed]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === st.speed)));
+  }
+  $('btnPlay').addEventListener('click', () => { st.playing = !st.playing; setSpeedUi(); });
+  document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => { st.speed = Number(b.dataset.speed); st.playing = true; setSpeedUi(); }));
+  $('btnSkip').addEventListener('click', () => { advance(300); renderAll(); });
+  $('btnReset').addEventListener('click', () => { reset(); renderAll(); });
+  document.querySelectorAll('.switch-view button').forEach((b) => b.addEventListener('click', () => {
+    document.body.dataset.view = b.dataset.view;
+    document.querySelectorAll('.switch-view button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+
+  function reset() {
+    st = freshState();
+    advance(T(8, 30) - st.now); // 문 연 지 조금 지난 매장에서 시작
+    st.log = st.log.slice(0, 12);
+    setSpeedUi(); dirty = true;
+  }
+  reset();
+  // 테스트 · 디버깅용 훅
+  globalThis.__brewslotDemo = { get state() { return st; }, advance: (s) => { advance(s); renderAll(); } };
+  requestAnimationFrame(frame);
 })();
 </script>
+</body>
+</html>
