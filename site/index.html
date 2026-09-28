@@ -149,6 +149,21 @@ button:disabled { cursor: not-allowed; }
 .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
 .mebox { border-radius: 16px; padding: 16px; background: var(--accent); color: var(--on-accent); margin-bottom: 14px; }
 .mebox .p { font-size: 26px; font-weight: 800; }
+.promo { display: flex; align-items: center; gap: 10px; border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; background: linear-gradient(135deg, var(--accent-soft), var(--panel2)); border: 1px solid var(--line); }
+.promo .ic { font-size: 22px; }
+.promo .tx { flex: 1; font-size: 13px; line-height: 1.35; }
+.promo .tx b { display: block; font-size: 14px; }
+.promo button { border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); padding: 7px 10px; font-weight: 700; font-size: 12px; white-space: nowrap; }
+.promise { display: flex; justify-content: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.promise span { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); }
+.promise .big { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.evts { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--line); margin-left: 4px; }
+.evts li { position: relative; padding: 0 0 10px 14px; font-size: 13px; }
+.evts li::before { content: ""; position: absolute; left: -6px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); }
+.evts .t { color: var(--muted); font-size: 11px; margin-right: 6px; }
+.evts code { font-size: 10.5px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; margin-left: 4px; }
+.spin { display: inline-block; width: 16px; height: 16px; border: 2.5px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: sp 0.9s linear infinite; vertical-align: -3px; }
+@keyframes sp { to { transform: rotate(360deg); } }
 
 /* ── store console ── */
 .console { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); min-width: 0; }
@@ -233,7 +248,7 @@ footer a { color: inherit; }
   .kpi { padding: 10px 12px; }
   .kpi .v { font-size: 18px; }
 }
-@media (prefers-reduced-motion: reduce) { .toast { animation: none; } .sw, .sw::after { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .toast, .spin { animation: none; } .sw, .sw::after { transition: none; } }
 </style>
 </head>
 <body data-view="customer">
@@ -306,7 +321,8 @@ footer a { color: inherit; }
   const hhmmss = (t) => { const [h, m, s] = clockOf(t); return pad(h) + ':' + pad(m) + ':' + pad(Math.floor(s)); };
   const won = (n) => n.toLocaleString('ko-KR') + '원';
   const SLOT = S.SLOT;
-  const HOLD_SEC = 180;
+  const HOLD_SEC = 300; // 서버 brewslot.order.hold-ttl 과 같은 5분
+  const PG_RECOVERY_SEC = 30; // PG 응답이 없을 때 결과를 다시 조회해 확정하기까지
 
   const STATION = {
     ESPRESSO: { name: '에스프레소 바', color: 'var(--espresso)' },
@@ -325,11 +341,13 @@ footer a { color: inherit; }
   ];
   const byId = Object.fromEntries(MENU.map((m) => [m.id, m]));
   const CATS = [['all', '전체'], ['coffee', '커피'], ['non', '논커피'], ['brew', '핸드드립']];
-  const ACTIVE = new Set(['HELD', 'PAID', 'READY', 'PICKED_UP']);
+  const ACTIVE = new Set(['HELD', 'PAYING', 'PAID', 'READY', 'PICKED_UP']);
   const CARDS = [
     { id: 'ok', name: '국민카드', no: '**** 4821', note: '' },
     { id: 'declined', name: '신한카드', no: '**** 0917', note: '잔액 부족', red: true },
+    { id: 'timeout', name: '하나카드', no: '**** 3310', note: '카드사 응답 지연' },
   ];
+  const CAMPAIGN = { name: '성수역점 오픈 기념 쿠폰', discount: 1000, min: 5000, limit: 30 };
 
   function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
@@ -342,6 +360,7 @@ footer a { color: inherit; }
       seq: 100, orders: [], cap: { ESPRESSO: 6, BLENDER: 3, BREW_BAR: 2 }, soldOut: new Set(), accepting: true, autoStaff: true,
       lost: 0, log: [],
       points: 3000, pointLog: [{ t: T(8, 0), amt: 3000, memo: '가입 축하 포인트' }],
+      issued: 6, coupon: null, useCoupon: true,
       cart: [], pickSel: null, route: 'menu', cat: 'all', viewOrder: null, conflict: null, payCard: 'ok', usePoints: true, payOrder: null, payMsg: null, toast: null,
       storeTab: 'kds',
     };
@@ -390,8 +409,10 @@ footer a { color: inherit; }
       id: 'o' + (++st.seq), no: st.seq, mine, items: items.map((l) => ({ ...l })), pickup, tickets, total,
       status: mine ? 'HELD' : 'PAID', createdAt: st.now, holdUntil: mine ? st.now + HOLD_SEC : null,
       paidAt: mine ? null : st.now, readyAt: null, pickedAt: null, pickAt: null,
-      pay: mine ? null : { card: total, points: 0 },
+      pay: mine ? null : { card: total, points: 0, coupon: 0 },
+      events: [],
     };
+    if (mine) ev(o, 'OrderPlaced', `주문 접수 · ${hhmm(pickup)} 제조 자리 확보 (${HOLD_SEC / 60}분간 유지)`);
     st.orders.push(o);
     if (!mine) addLog(`#${o.no} 주문 접수 · ${hhmm(pickup)} 픽업 · ${itemsText(o.items)}`);
     return { ok: true, order: o };
@@ -400,6 +421,8 @@ footer a { color: inherit; }
   const itemsText = (items) => items.map((l) => byId[l.menuId].name + (l.qty > 1 ? ' ×' + l.qty : '')).join(', ');
   const firstSlot = (o) => Math.min(...o.tickets.map((t) => t.slot));
   function addLog(msg) { st.log.unshift({ t: st.now, msg }); if (st.log.length > 80) st.log.pop(); }
+  function ev(o, code, text) { o.events.push({ t: st.now, code, text }); }
+  const remaining = () => CAMPAIGN.limit - st.issued;
 
   // ───────────────────────── 매장에 오는 다른 손님들 ─────────────────────────
   function rate(t) { const [h, m] = clockOf(t); const mm = h * 60 + m; if (mm >= 8 * 60 + 40 && mm < 9 * 60 + 30) return 1.4; if (mm >= 8 * 60 + 15 && mm < 10 * 60) return 0.7; return 0.35; }
@@ -417,7 +440,13 @@ footer a { color: inherit; }
     const want = earliest() + SLOT * (1 + Math.floor(st.rng() * 5));
     let r = tryPlace(items, want, false);
     if (!r.ok && r.alts.length && st.rng() < 0.7) r = tryPlace(items, r.alts[0], false);
-    if (!r.ok) { st.lost++; addLog(`${hhmm(want)} 픽업을 원한 손님 — 가능한 시간이 맞지 않아 주문하지 않음`); }
+    if (!r.ok) { st.lost++; addLog(`${hhmm(want)} 픽업을 원한 손님 — 가능한 시간이 맞지 않아 주문하지 않음`); return; }
+    // 이벤트 쿠폰을 받아 가는 손님들 (선착순 한도가 차면 더 발급되지 않는다)
+    if (remaining() > 0 && st.rng() < 0.4) {
+      st.issued++;
+      if (remaining() === 0) addLog(`${CAMPAIGN.name} 선착순 ${CAMPAIGN.limit}장 모두 발급됨`);
+      if (r.order.total >= CAMPAIGN.min) { r.order.pay.coupon = CAMPAIGN.discount; r.order.pay.card -= CAMPAIGN.discount; }
+    }
   }
   const procTime = (tk) => Math.min(270, 80 + tk.units * 30);
 
@@ -429,13 +458,21 @@ footer a { color: inherit; }
     for (const o of st.orders) {
       if (o.status === 'HELD' && t >= o.holdUntil) {
         o.status = 'EXPIRED'; changed = true;
-        if (st.payOrder === o.id) st.payMsg = { kind: 'bad', text: '결제 시간(3분)이 지나 잡아둔 제조 자리가 풀렸어요. 다시 주문해 주세요.' };
+        if (st.payOrder === o.id) st.payMsg = { kind: 'bad', text: `결제 시간(${HOLD_SEC / 60}분)이 지나 잡아둔 제조 자리가 풀렸어요. 다시 주문해 주세요.` };
+      }
+      if (o.status === 'PAYING' && t >= o.recoverAt) {
+        st.now = o.recoverAt;
+        ev(o, 'PaymentCaptured', 'PG 결과 재조회 → 승인 확인');
+        ev(o, 'OrderPaid', '결제 확정 · 매장에 주문 전달');
+        o.status = 'PAID'; o.paidAt = o.recoverAt; st.now = t; changed = true;
+        addLog(`#${o.no} PG 결과 재조회 → 승인 확인 · 결제 확정`);
+        if (o.mine) st.toast = { text: `#${o.no} 결제가 확인됐어요. ${hhmm(o.pickup)}에 맞춰 만들어 드릴게요.`, id: o.id };
       }
       if (o.status === 'PAID') {
         for (const tk of o.tickets) if (!tk.done && st.autoStaff && t >= tk.slot + procTime(tk)) { tk.done = true; tk.doneAt = t; changed = true; }
         if (o.tickets.every((tk) => tk.done)) {
           o.status = 'READY'; o.readyAt = Math.max(...o.tickets.map((tk) => tk.doneAt)); changed = true;
-          if (o.mine) st.toast = { text: `#${o.no} 음료가 준비됐어요! 픽업대에서 받아가세요.`, id: o.id };
+          if (o.mine) { st.toast = { text: `#${o.no} 음료가 준비됐어요! 픽업대에서 받아가세요.`, id: o.id }; ev(o, 'OrderReady', o.readyAt <= o.pickup ? `준비 완료 · 약속보다 ${Math.round((o.pickup - o.readyAt) / 60)}분 먼저` : '준비 완료 · 약속 시각 지남'); }
           else o.pickAt = Math.max(o.readyAt, o.pickup - 120) + Math.floor(st.rng() * 300);
           addLog(`#${o.no} 준비 완료${o.readyAt > o.pickup ? ' (약속 시각 지남)' : ''}`);
         }
@@ -461,43 +498,94 @@ footer a { color: inherit; }
     if (!r.ok) { st.conflict = { pickup: st.pickSel, reason: r.reason, alts: r.alts }; st.pickSel = null; return; }
     st.conflict = null; st.payOrder = r.order.id; st.payMsg = null; st.route = 'pay';
   }
+  /** 결제 화면에서 적용될 금액: 쿠폰 → 포인트 → 나머지 카드 (서버 Order.cardAmount 와 같은 순서) */
+  function amountsFor(o) {
+    const c = st.coupon;
+    const couponOk = !!c && c.status === 'ISSUED' && o.total >= c.min;
+    const coupon = couponOk && st.useCoupon ? c.discount : 0;
+    const points = st.usePoints ? Math.min(st.points, o.total - coupon) : 0;
+    return { coupon, points, card: o.total - coupon - points, couponOk };
+  }
+  function claimCoupon() {
+    if (st.coupon || remaining() <= 0) return;
+    st.issued++;
+    st.coupon = { id: 'CP' + st.issued, discount: CAMPAIGN.discount, min: CAMPAIGN.min, status: 'ISSUED', orderNo: null };
+    addLog(`앱 회원 쿠폰 발급 (${st.issued}/${CAMPAIGN.limit})`);
+  }
+  function restoreBenefits(o, why) {
+    if (o.pay.points) { st.points += o.pay.points; st.pointLog.unshift({ t: st.now, amt: o.pay.points, memo: `#${o.no} ${why}` }); }
+    if (o.pay.coupon && st.coupon) { st.coupon.status = 'ISSUED'; st.coupon.orderNo = null; }
+  }
   function payMine() {
     const o = st.orders.find((x) => x.id === st.payOrder); if (!o || o.status !== 'HELD') return;
-    const pts = st.usePoints ? Math.min(st.points, o.total) : 0;
-    if (pts) { st.points -= pts; st.pointLog.unshift({ t: st.now, amt: -pts, memo: `#${o.no} 주문 결제` }); }
-    if (st.payCard === 'declined' && o.total - pts > 0) {
-      if (pts) { st.points += pts; st.pointLog.unshift({ t: st.now, amt: pts, memo: `#${o.no} 카드 승인 실패로 사용 취소` }); }
+    const a = amountsFor(o);
+    ev(o, 'PaymentRequested', `결제 요청 · 카드 ${won(a.card)}${a.coupon ? ` · 쿠폰 ${won(a.coupon)}` : ''}${a.points ? ` · 포인트 ${a.points.toLocaleString()}P` : ''}`);
+    o.pay = { card: a.card, points: a.points, coupon: a.coupon };
+    if (a.points) { st.points -= a.points; st.pointLog.unshift({ t: st.now, amt: -a.points, memo: `#${o.no} 주문 결제` }); }
+    if (a.coupon) { st.coupon.status = 'USED'; st.coupon.orderNo = o.no; }
+    if (a.points || a.coupon) ev(o, 'PointsRedeemed', `${a.coupon ? '쿠폰' : ''}${a.coupon && a.points ? ' · ' : ''}${a.points ? '포인트' : ''} 사용 (한 번에 처리)`);
+    if (st.payCard === 'declined' && a.card > 0) {
+      ev(o, 'PaymentFailed', '카드 승인 거절 (잔액 부족)');
+      restoreBenefits(o, '카드 승인 실패로 사용 취소');
+      if (a.points || a.coupon) ev(o, 'PointsRedemptionReversed', `${a.coupon ? '쿠폰' : ''}${a.coupon && a.points ? ' · ' : ''}${a.points ? '포인트' : ''} 자동 복원`);
+      ev(o, 'OrderCancelled', '주문 취소 · 제조 자리 반환');
       o.status = 'FAILED';
-      st.payMsg = { kind: 'bad', text: `카드 승인이 거절됐어요 (잔액 부족).${pts ? ' 사용한 포인트 ' + pts.toLocaleString() + 'P는 돌려드렸어요.' : ''} 잡아둔 제조 자리도 풀었어요.` };
-      addLog(`#${o.no} 앱 주문 카드 승인 실패 → 포인트 복원 · 제조 자리 반환`);
+      const back = a.coupon && a.points ? `쿠폰과 포인트 ${a.points.toLocaleString()}P는` : a.coupon ? '쿠폰은' : a.points ? `포인트 ${a.points.toLocaleString()}P는` : '';
+      st.payMsg = { kind: 'bad', text: `카드 승인이 거절됐어요 (잔액 부족).${back ? ` 사용한 ${back} 돌려드렸어요.` : ''} 잡아둔 제조 자리도 풀었어요.` };
+      addLog(`#${o.no} 앱 주문 카드 승인 실패 → 혜택 복원 · 제조 자리 반환`);
       return;
     }
-    o.status = 'PAID'; o.paidAt = st.now; o.pay = { card: o.total - pts, points: pts };
-    addLog(`#${o.no} 앱 주문 결제 완료 · ${hhmm(o.pickup)} 픽업 · ${itemsText(o.items)}`);
+    if (st.payCard === 'timeout' && a.card > 0) {
+      o.status = 'PAYING'; o.recoverAt = st.now + PG_RECOVERY_SEC; o.retries = 0;
+      ev(o, 'PaymentUnknown', 'PG 응답 없음 → 실패로 단정하지 않고 결과 재조회 예약');
+      addLog(`#${o.no} 앱 주문 PG 응답 없음 → 결과 재조회 예약 (제조 자리는 유지)`);
+    } else {
+      o.status = 'PAID'; o.paidAt = st.now;
+      ev(o, 'PaymentCaptured', `카드 승인 ${won(a.card)}`);
+      ev(o, 'OrderPaid', '결제 확정 · 매장에 주문 전달');
+      addLog(`#${o.no} 앱 주문 결제 완료 · ${hhmm(o.pickup)} 픽업 · ${itemsText(o.items)}`);
+    }
     st.cart = []; st.pickSel = null; st.payOrder = null; st.viewOrder = o.id; st.route = 'order';
+  }
+  /** 결제 확인이 늦어 고객이 다시 누른 경우: 같은 결제로 응답하고 새 결제를 만들지 않는다 (서버의 멱등 결제 시작과 같은 동작) */
+  function retryPay(o) {
+    if (!o || o.status !== 'PAYING') return;
+    o.retries++;
+    ev(o, 'PaymentRequested', '결제 재요청 → 진행 중인 결제로 응답 (새 결제 없음)');
+    st.toast = { text: '이미 결제를 확인하고 있어요. 두 번 결제되지 않아요.', id: o.id };
   }
   function cancelHold() { const o = st.orders.find((x) => x.id === st.payOrder); if (o && o.status === 'HELD') o.status = 'EXPIRED'; st.payOrder = null; st.payMsg = null; st.route = 'checkout'; }
   function cancelMine(o) {
     if (!o || o.status !== 'PAID' || st.now >= firstSlot(o)) return;
     o.status = 'CANCELLED';
-    if (o.pay.points) { st.points += o.pay.points; st.pointLog.unshift({ t: st.now, amt: o.pay.points, memo: `#${o.no} 주문 취소 환불` }); }
+    if (st.toast && st.toast.id === o.id) st.toast = null;
+    restoreBenefits(o, '주문 취소 환불');
+    ev(o, 'OrderCancelled', `고객 취소 · 카드 ${won(o.pay.card)} 승인 취소${o.pay.coupon || o.pay.points ? ' · 쿠폰·포인트 복원' : ''}`);
     addLog(`#${o.no} 고객 취소 · 카드 ${won(o.pay.card)} 승인 취소`);
   }
   function pickupMine(o) {
     if (!o || o.status !== 'READY') return;
     o.status = 'PICKED_UP'; o.pickedAt = st.now;
     const earn = Math.floor((o.pay.card * 0.05) / 10) * 10;
-    if (earn) { st.points += earn; st.pointLog.unshift({ t: st.now, amt: earn, memo: `#${o.no} 적립 (카드 결제액 5%)` }); }
+    ev(o, 'OrderPickedUp', '픽업 완료');
+    if (earn) { st.points += earn; st.pointLog.unshift({ t: st.now, amt: earn, memo: `#${o.no} 적립 (카드 결제액 5%)` }); ev(o, 'PointsEarned', `포인트 ${earn}P 적립 (카드 결제액 기준)`); }
     if (st.toast && st.toast.id === o.id) st.toast = null;
     addLog(`#${o.no} 픽업 완료`);
   }
 
   // ───────────────────────── 고객 앱 화면 ─────────────────────────
   const STATUS_PILL = {
-    HELD: ['acc', '결제 대기'], PAID: ['acc', '접수됨'], READY: ['good', '픽업 대기'], PICKED_UP: ['', '픽업 완료'],
+    HELD: ['acc', '결제 대기'], PAYING: ['warn', '결제 확인 중'], PAID: ['acc', '접수됨'], READY: ['good', '픽업 대기'], PICKED_UP: ['', '픽업 완료'],
     CANCELLED: ['', '취소됨'], EXPIRED: ['', '시간 만료'], FAILED: ['bad', '결제 실패'],
   };
   const orderStage = (o) => (o.status === 'PAID' ? (st.now >= firstSlot(o) ? 'MAKING' : 'WAIT') : o.status);
+  function promoBanner() {
+    const c = st.coupon;
+    if (c && c.status === 'ISSUED') return `<div class="promo"><span class="ic">🎟️</span><div class="tx"><b>${won(c.discount)} 할인 쿠폰 보유</b>${won(c.min)} 이상 주문하면 결제할 때 자동으로 적용돼요</div></div>`;
+    if (c) return '';
+    if (remaining() <= 0) return `<div class="promo" style="opacity:.6"><span class="ic">🎉</span><div class="tx"><b>${CAMPAIGN.name}</b>선착순 ${CAMPAIGN.limit}장이 모두 소진됐어요</div></div>`;
+    return `<div class="promo"><span class="ic">🎉</span><div class="tx"><b>${CAMPAIGN.name} ${won(CAMPAIGN.discount)}</b>선착순 ${CAMPAIGN.limit}명 · <span class="num">남은 ${remaining()}장</span> · ${won(CAMPAIGN.min)} 이상</div><button data-act="claim">쿠폰 받기</button></div>`;
+  }
   const until = (t) => `<span class="num" data-until="${t}"></span>`;
   const fmtLeft = (sec) => (sec <= 0 ? '0:00' : Math.floor(sec / 60) + ':' + pad(Math.floor(sec % 60)));
   function slotLevel(pickup, u) { const p = S.loadPercentBefore(pickup, u); return p < 50 ? ['lv-ok', '여유'] : p < 85 ? ['lv-mid', '보통'] : ['lv-busy', '혼잡']; }
@@ -510,6 +598,7 @@ footer a { color: inherit; }
     if (r === 'menu') {
       h = `<div><h2>BrewSlot 성수역점</h2><div class="sub">${st.accepting ? '영업 중 · 받을 시각에 맞춰 만들어 드려요' : '지금은 주문을 받지 않아요'}</div></div>${ptsPill}`;
       if (!st.accepting) b += `<div class="banner warn">매장 사정으로 잠시 주문 접수를 멈췄어요.</div>`;
+      b += promoBanner();
       b += `<div class="chips" role="group" aria-label="분류">${CATS.map(([k, n]) => `<button class="chip" data-cat="${k}" aria-pressed="${st.cat === k}">${n}</button>`).join('')}</div>`;
       b += `<ul class="menu-list">${MENU.filter((m) => st.cat === 'all' || m.cat === st.cat).map((m) => {
         const inCart = st.cart.find((l) => l.menuId === m.id); const out = st.soldOut.has(m.id);
@@ -549,28 +638,35 @@ footer a { color: inherit; }
       if (st.payMsg) {
         b += `<div class="banner ${st.payMsg.kind}" role="alert">${st.payMsg.text}</div><button class="primary" data-act="retry"><span>다시 주문하기</span><span>›</span></button>`;
       } else {
-        const pts = st.usePoints ? Math.min(st.points, o.total) : 0;
+        const a = amountsFor(o); const pts = a.points;
         b += `<div class="hold"><div class="cd num" data-hold="${o.holdUntil}">${fmtLeft(o.holdUntil - st.now)}</div><div class="t">${hhmm(o.pickup)} 픽업 자리를 잡아뒀어요. 시간 안에 결제해 주세요.</div></div>`;
         b += o.items.map((l) => `<div class="kv"><span>${byId[l.menuId].name} × ${l.qty}</span><span class="num">${won(byId[l.menuId].price * l.qty)}</span></div>`).join('');
+        if (st.coupon && st.coupon.status === 'ISSUED') {
+          b += `<div class="section-h">쿠폰</div><button class="toggle" data-act="coupon" role="switch" aria-checked="${a.couponOk && st.useCoupon}" ${a.couponOk ? '' : 'disabled'}><span>🎟️ ${won(st.coupon.discount)} 할인${a.couponOk ? '' : `<div style="font-size:12px;color:var(--muted)">${won(st.coupon.min)} 이상 주문 시 사용 가능</div>`}</span><span class="sw"></span></button>`;
+        }
         b += `<div class="section-h">포인트</div><button class="toggle" data-act="points" role="switch" aria-checked="${st.usePoints}"><span>보유 <b class="num">${st.points.toLocaleString()}P</b> 사용</span><span class="sw"></span></button>`;
         b += `<div class="section-h">결제 카드</div>${CARDS.map((c) => `<button class="card-opt" data-card="${c.id}" aria-pressed="${st.payCard === c.id}"><span class="cc${c.red ? ' red' : ''}"></span><span><b>${c.name}</b> <span class="num">${c.no}</span>${c.note ? `<div style="font-size:12px;color:var(--muted)">${c.note}</div>` : ''}</span></button>`).join('')}`;
-        b += `<div style="margin-top:10px"><div class="kv"><span class="m">주문 금액</span><span class="num">${won(o.total)}</span></div><div class="kv"><span class="m">포인트 사용</span><span class="num">−${won(pts)}</span></div><div class="kv total"><span>카드 결제</span><span class="num">${won(o.total - pts)}</span></div></div>`;
+        b += `<div style="margin-top:10px"><div class="kv"><span class="m">주문 금액</span><span class="num">${won(o.total)}</span></div>${a.coupon ? `<div class="kv"><span class="m">쿠폰 할인</span><span class="num">−${won(a.coupon)}</span></div>` : ''}<div class="kv"><span class="m">포인트 사용</span><span class="num">−${won(pts)}</span></div><div class="kv total"><span>카드 결제</span><span class="num">${won(a.card)}</span></div></div>`;
         b += `<button class="secondary" data-act="cancelHold" style="margin-top:14px">주문 취소</button>`;
-        b += `<div class="cartbar"><button class="primary" data-act="pay"><span>결제하기</span><span class="num">${won(o.total - pts)}</span></button></div>`;
+        b += `<div class="cartbar"><button class="primary" data-act="pay"><span>결제하기</span><span class="num">${won(a.card)}</span></button></div>`;
       }
     } else if (r === 'order') {
       const o = st.orders.find((x) => x.id === st.viewOrder);
       h = `${back('orders')}<h2>주문 상세</h2>${ptsPill}`;
       const stg = orderStage(o); const fs = firstSlot(o);
       const msg = {
+        PAYING: ['결제 결과를 확인하고 있어요', '카드사 응답이 늦어요. 자동으로 다시 확인하니 기다려 주세요'],
         WAIT: [`${hhmm(o.pickup)}에 받으실 수 있어요`, `음료가 식지 않도록 ${hhmm(fs)}부터 만들어요 · ${until(fs)} 남음`],
         MAKING: ['만들고 있어요', `${hhmm(o.pickup)}까지 준비해 드릴게요`],
         READY: ['준비됐어요! 픽업대에서 받아가세요', o.readyAt <= o.pickup ? `약속한 ${hhmm(o.pickup)}보다 먼저 준비됐어요` : '약속 시각보다 늦어져 죄송해요'],
         PICKED_UP: ['맛있게 드세요', `${hhmm(o.pickedAt)} 픽업`],
         CANCELLED: ['주문이 취소됐어요', '카드 승인 취소와 포인트 환불이 끝났어요'],
       }[stg];
-      b += `<div class="bignum"><span class="pill acc">주문번호</span><div class="no num">#${o.no}</div><div class="msg">${msg[0]}</div><div class="msg2">${msg[1]}</div></div>`;
-      if (stg !== 'CANCELLED') {
+      const promise = ['PAYING', 'WAIT', 'MAKING'].includes(stg)
+        ? `<div class="promise"><span class="big num">픽업 약속 ${hhmm(o.pickup)}</span><span class="num">${until(o.pickup)} 남음</span></div>` : '';
+      b += `<div class="bignum"><span class="pill acc">주문번호</span><div class="no num">#${o.no}</div><div class="msg">${stg === 'PAYING' ? '<span class="spin"></span> ' : ''}${msg[0]}</div><div class="msg2">${msg[1]}</div>${promise}</div>`;
+      if (stg === 'PAYING') b += `<button class="secondary" data-act="retryPay" data-id="${o.id}" style="margin:6px 0 4px">결제가 안 된 것 같아요 · 다시 요청</button>${o.retries ? `<div class="banner good" style="margin-top:8px;background:var(--good-soft);color:var(--good)">같은 결제로 확인했어요. 다시 눌러도 두 번 결제되지 않아요 (재요청 ${o.retries}회).</div>` : ''}`;
+      if (stg !== 'CANCELLED' && stg !== 'PAYING') {
         const steps = [
           ['결제 완료', hhmm(o.paidAt), true],
           ['제조 시작', st.now >= fs ? hhmm(fs) : hhmm(fs) + ' 예정', st.now >= fs],
@@ -581,7 +677,11 @@ footer a { color: inherit; }
         b += `<ol class="track">${steps.map((s, i) => `<li class="${s[2] ? 'done' : i === cur ? 'now' : ''}"><span class="b">${s[2] ? '✓' : ''}</span><div><div class="tt">${s[0]}</div><div class="ts num">${s[1]}</div></div></li>`).join('')}</ol>`;
       }
       b += `<div class="section-h">주문 내역</div>${o.items.map((l) => `<div class="kv"><span>${byId[l.menuId].name} × ${l.qty}</span><span class="num">${won(byId[l.menuId].price * l.qty)}</span></div>`).join('')}`;
-      b += `<div class="kv"><span class="m">포인트 사용</span><span class="num">−${won(o.pay.points)}</span></div><div class="kv total"><span>카드 결제</span><span class="num">${won(o.pay.card)}</span></div>`;
+      b += `${o.pay.coupon ? `<div class="kv"><span class="m">쿠폰 할인</span><span class="num">−${won(o.pay.coupon)}</span></div>` : ''}<div class="kv"><span class="m">포인트 사용</span><span class="num">−${won(o.pay.points)}</span></div><div class="kv total"><span>카드 결제</span><span class="num">${won(o.pay.card)}</span></div>`;
+      const evs = o.events.slice();
+      if (o.status !== 'CANCELLED' && o.paidAt && st.now >= fs) evs.push({ t: fs, code: 'OrderPreparing', text: '제조 시작 (픽업 시각에 맞춰 역산한 슬롯)' });
+      evs.sort((x, y) => x.t - y.t);
+      b += `<details style="margin-top:14px"><summary class="section-h" style="cursor:pointer;margin:0">주문 기록 <small>${evs.length}건</small></summary><ul class="evts" style="margin-top:8px">${evs.map((e) => `<li><span class="t num">${hhmmss(e.t)}</span>${e.text}<code>${e.code}</code></li>`).join('')}</ul></details>`;
       if (stg === 'READY') b += `<div class="cartbar"><button class="primary" data-act="pickup" data-id="${o.id}"><span>음료를 받았어요</span><span>✓</span></button></div>`;
       else if (stg === 'WAIT') b += `<button class="secondary" data-act="cancel" data-id="${o.id}" style="margin-top:16px">주문 취소 · 만들기 시작 전까지 가능</button>`;
       else if (stg === 'PICKED_UP' || stg === 'CANCELLED') b += `<button class="secondary" data-act="reorder" data-id="${o.id}" style="margin-top:16px">같은 메뉴 다시 주문하기</button>`;
@@ -593,13 +693,15 @@ footer a { color: inherit; }
     } else if (r === 'me') {
       h = `<div><h2>내 정보</h2><div class="sub">김브루 님</div></div>`;
       b += `<div class="mebox"><div style="font-size:13px;opacity:.85">사용 가능한 포인트</div><div class="p num">${st.points.toLocaleString()}P</div><div style="font-size:12px;opacity:.85">음료를 받으면 카드 결제액의 5%를 적립해 드려요</div></div>`;
+      const c = st.coupon;
+      b += `<div class="section-h">쿠폰함</div>${c ? `<div class="kv"><span>🎟️ ${CAMPAIGN.name} ${won(c.discount)} <span class="m">· ${won(c.min)} 이상</span></span><span class="pill ${c.status === 'ISSUED' ? 'good' : ''}">${c.status === 'ISSUED' ? '사용 가능' : `#${c.orderNo} 주문에 사용`}</span></div>` : `<div class="kv"><span class="m">받은 쿠폰이 없어요</span></div>`}`;
       b += `<div class="section-h">포인트 내역</div>${st.pointLog.map((p) => `<div class="kv"><span><span class="m num">${hhmm(p.t)}</span> ${p.memo}</span><span class="num" style="color:${p.amt > 0 ? 'var(--good)' : 'var(--ink)'};font-weight:700">${p.amt > 0 ? '+' : ''}${p.amt.toLocaleString()}P</span></div>`).join('')}`;
     }
     if (st.toast && !(r === 'order' && st.viewOrder === st.toast.id)) b = `<div class="toast" role="status"><span>🔔</span><span>${st.toast.text}</span><button data-open="${st.toast.id}">보기</button></div>` + b;
     const body = $('phBody'); const keep = body.dataset.route === r ? body.scrollTop : 0;
     $('phHead').innerHTML = h; body.innerHTML = b; body.dataset.route = r; body.scrollTop = keep;
     const nav = r === 'checkout' || r === 'pay' ? 'menu' : r === 'order' ? 'orders' : r;
-    const hasActive = st.orders.some((o) => o.mine && (o.status === 'PAID' || o.status === 'READY'));
+    const hasActive = st.orders.some((o) => o.mine && ['PAYING', 'PAID', 'READY'].includes(o.status));
     $('phNav').querySelectorAll('button').forEach((x) => {
       if (x.dataset.nav === nav) x.setAttribute('aria-current', 'page'); else x.removeAttribute('aria-current');
       const dot = x.querySelector('.dot');
@@ -625,6 +727,9 @@ footer a { color: inherit; }
     else if (d.open) { st.viewOrder = d.open; st.route = 'order'; if (st.toast && st.toast.id === d.open) st.toast = null; }
     else if (d.act === 'place') placeMine();
     else if (d.act === 'points') st.usePoints = !st.usePoints;
+    else if (d.act === 'coupon') st.useCoupon = !st.useCoupon;
+    else if (d.act === 'claim') claimCoupon();
+    else if (d.act === 'retryPay') retryPay(st.orders.find((o) => o.id === d.id));
     else if (d.act === 'pay') payMine();
     else if (d.act === 'cancelHold') cancelHold();
     else if (d.act === 'retry') { st.payOrder = null; st.payMsg = null; st.route = 'checkout'; }
@@ -696,15 +801,15 @@ footer a { color: inherit; }
       }
       h += `</tbody></table></div><p class="hint" style="margin-top:10px">맛있는 시간 = 완성 후 픽업까지 허용하는 시간. 따뜻한 음료는 픽업 직전 5분 안에, 아이스 · 스무디 · 드립은 10분 안에 만들어요.</p>`;
     } else if (st.storeTab === 'sales') {
-      const list = st.orders.filter((o) => o.pay && o.status !== 'FAILED');
+      const list = st.orders.filter((o) => o.pay && !['FAILED', 'PAYING'].includes(o.status));
       const valid = list.filter((o) => o.status !== 'CANCELLED');
       const fee = (o) => Math.round(o.pay.card * 0.022);
-      const gross = valid.reduce((s, o) => s + o.total, 0), card = valid.reduce((s, o) => s + o.pay.card, 0), pts = valid.reduce((s, o) => s + o.pay.points, 0), fees = valid.reduce((s, o) => s + fee(o), 0);
+      const gross = valid.reduce((s, o) => s + o.total, 0), card = valid.reduce((s, o) => s + o.pay.card, 0), pts = valid.reduce((s, o) => s + o.pay.points, 0), cps = valid.reduce((s, o) => s + (o.pay.coupon || 0), 0), fees = valid.reduce((s, o) => s + fee(o), 0);
       const refunds = list.filter((o) => o.status === 'CANCELLED').reduce((s, o) => s + o.total, 0);
-      h += `<div class="sum-grid"><div class="sum"><div class="l">매출 · ${valid.length}건</div><div class="v num">${won(gross)}</div></div><div class="sum"><div class="l">카드 / 포인트</div><div class="v num" style="font-size:15px">${won(card)} / ${won(pts)}</div></div><div class="sum"><div class="l">카드 수수료 2.2% (건별)</div><div class="v num">−${won(fees)}</div></div><div class="sum hl"><div class="l">정산 예정액 · 다음 영업일</div><div class="v num">${won(gross - fees)}</div></div></div>`;
-      if (refunds) h += `<p class="hint" style="margin:-6px 0 12px">취소 ${won(refunds)}은 매출에서 빠졌어요.</p>`;
-      h += `<div class="tbl-wrap" style="max-height:420px"><table><thead><tr><th>주문</th><th>결제</th><th>픽업</th><th>메뉴</th><th class="r">금액</th><th class="r">카드</th><th class="r">포인트</th><th class="r">수수료</th><th>상태</th></tr></thead><tbody>`;
-      h += list.slice().reverse().map((o) => { const [c, t] = STATUS_PILL[o.status]; const x = o.status === 'CANCELLED'; return `<tr${x ? ' style="color:var(--muted)"' : ''}><td class="num"><b>#${o.no}</b>${o.mine ? ' <span class="pill acc">내 주문</span>' : ''}</td><td class="num">${hhmm(o.paidAt)}</td><td class="num">${hhmm(o.pickup)}</td><td>${itemsText(o.items)}</td><td class="r num">${won(o.total)}</td><td class="r num">${won(o.pay.card)}</td><td class="r num">${won(o.pay.points)}</td><td class="r num">${x ? '0원' : won(fee(o))}</td><td><span class="pill ${c}">${t}</span></td></tr>`; }).join('');
+      h += `<div class="sum-grid"><div class="sum"><div class="l">매출 · ${valid.length}건</div><div class="v num">${won(gross)}</div></div><div class="sum"><div class="l">카드 / 포인트 / 쿠폰</div><div class="v num" style="font-size:14px">${won(card)} / ${won(pts)} / ${won(cps)}</div></div><div class="sum"><div class="l">카드 수수료 2.2% (건별)</div><div class="v num">−${won(fees)}</div></div><div class="sum hl"><div class="l">정산 예정액 · 다음 영업일</div><div class="v num">${won(gross - fees)}</div></div></div>`;
+      h += `<p class="hint" style="margin:-6px 0 12px">포인트·쿠폰 할인분은 브랜드가 부담해 정가 기준으로 정산돼요. ${CAMPAIGN.name}: ${st.issued}/${CAMPAIGN.limit}장 발급, ${valid.filter((o) => o.pay.coupon).length}장 사용.${refunds ? ` 취소 ${won(refunds)}은 매출에서 빠졌어요.` : ''}</p>`;
+      h += `<div class="tbl-wrap" style="max-height:420px"><table><thead><tr><th>주문</th><th>결제</th><th>픽업</th><th>메뉴</th><th class="r">금액</th><th class="r">카드</th><th class="r">포인트</th><th class="r">쿠폰</th><th class="r">수수료</th><th>상태</th></tr></thead><tbody>`;
+      h += list.slice().reverse().map((o) => { const [c, t] = STATUS_PILL[o.status]; const x = o.status === 'CANCELLED'; return `<tr${x ? ' style="color:var(--muted)"' : ''}><td class="num"><b>#${o.no}</b>${o.mine ? ' <span class="pill acc">내 주문</span>' : ''}</td><td class="num">${hhmm(o.paidAt)}</td><td class="num">${hhmm(o.pickup)}</td><td>${itemsText(o.items)}</td><td class="r num">${won(o.total)}</td><td class="r num">${won(o.pay.card)}</td><td class="r num">${won(o.pay.points)}</td><td class="r num">${won(o.pay.coupon || 0)}</td><td class="r num">${x ? '0원' : won(fee(o))}</td><td><span class="pill ${c}">${t}</span></td></tr>`; }).join('');
       h += `</tbody></table></div>`;
     }
     const body = $('conBody');
