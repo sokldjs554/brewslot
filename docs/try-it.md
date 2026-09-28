@@ -28,6 +28,9 @@
 | ④ 같은 시각에 또 주문 | `POST /orders` | `Idempotency-Key` 만 바꿔서 → **409 + alternatives** |
 | ⑤ 결제 | `POST /orders/{orderId}/payment` | `{"cardToken":"tok_visa"}` (`tok_declined` 거절, `tok_timeout` PG 응답 유실) |
 | ⑥ 확인 | `GET /orders/{orderId}` | 잠시 후 `PAID` |
+| ⑦ 매장 변경 후보 | `GET /orders/{orderId}/transfer-options` | 같은 브랜드 매장별 같은 메뉴 여부 · 지금 약속 시각 가능 여부 |
+| ⑧ 매장 변경 요청 | `POST /orders/{orderId}/transfers` | `{"toStoreId":103,"pickupAt":"⑦의 시각"}` → `AWAITING_STORE` (원래 주문 유지) |
+| ⑨ 새 매장 수락 | `POST /stores/103/transfer-requests/{transferId}/acceptance` | 주문의 `storeId` 가 103 으로. `/refusal` 로 거절하면 원래 주문 그대로 |
 
 ③의 본문 — `pickupAt` 은 ②의 응답에서 `feasible: true` 인 시각 하나를 복사해 넣습니다.
 
@@ -47,11 +50,11 @@
 | 결제 Saga | `services/order-service/.../ordering/saga/CheckoutSagaOrchestrator.kt` |
 | PG 결과 불명 복구 | `services/payment-service/.../application/PaymentService.kt` |
 | 복식부기 원장 + DB 트리거 | `services/loyalty-service/src/main/resources/db/migration/loyalty/V1__loyalty_schema.sql` |
-| 설계 결정 12건 | `docs/adr/` |
+| 설계 결정 13건 | `docs/adr/` |
 
 ## 4. 테스트 돌려 보기
 
 ```bash
 ./scripts/stop-all.sh                      # 데모용 인프라를 내리고
-./gradlew build                            # 94개 JVM 테스트 (Testcontainers 로 DB·Kafka·Redis 를 직접 띄움, 약 5분)
+./gradlew build                            # 108개 JVM 테스트 (Testcontainers 로 DB·Kafka·Redis 를 직접 띄움, 약 5분)
 ```
