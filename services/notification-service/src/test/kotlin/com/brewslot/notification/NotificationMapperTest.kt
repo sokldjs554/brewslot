@@ -58,6 +58,15 @@ class NotificationMapperTest {
             payload("orderId" to "o", "memberId" to 1, "reason" to "REFUSED_BY_STORE"),
         )!!
         assertThat(moved.body).contains("09:45")
+        val risk = NotificationMapper.from(
+            "e", "PickupAtRisk", at,
+            payload(
+                "orderId" to "o", "memberId" to 1, "storeName" to "역삼점", "expectedDelayMinutes" to 8,
+                "suggestedStoreName" to "역삼역점", "suggestedPickupAt" to "2026-09-28T00:45:00Z", "walkMinutes" to 6,
+            ),
+        )!!
+        assertThat(risk.title).isEqualTo("역삼점이 약 8분 늦어지고 있어요")
+        assertThat(risk.body).contains("역삼역점 (도보 6분)").contains("09:45")
         assertThat(refused.body).contains("원래 매장 주문은 그대로")
     }
 

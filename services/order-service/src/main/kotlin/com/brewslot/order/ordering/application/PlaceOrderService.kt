@@ -87,6 +87,7 @@ class PlaceOrderService(
                     "storeId" to e.store.id,
                     "storeName" to e.store.name,
                     "pickupAt" to cmd.pickupAt.toString(),
+                    "walkMinutes" to (e.walkMinutes ?: -1),
                     "items" to e.cart.map { mapOf("menuItemId" to it.menuItemId, "quantity" to it.quantity) },
                 )
             }

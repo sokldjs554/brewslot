@@ -43,6 +43,7 @@ object NotificationMapper {
                 "픽업 매장이 바뀌었어요" to
                     "결제 · 쿠폰 · 포인트는 그대로예요. 새 매장에서 ${pickup?.let(::kst) ?: "약속한 시각"}에 받아가세요."
             "OrderTransferFailed" -> "매장 변경이 이뤄지지 않았어요" to transferFailedBody(p.path("reason").asText())
+            "PickupAtRisk" -> "${p.path("storeName").asText()}이 약 ${p.path("expectedDelayMinutes").asInt()}분 늦어지고 있어요" to riskBody(p)
             else -> return null
         }
         return Notification("${occurredAt.toEpochMilli()}:$eventId", memberId, orderId, eventType, title, body, occurredAt)
@@ -52,6 +53,13 @@ object NotificationMapper {
         if (pickup == null || readyAt == null) return "픽업대에서 받아가세요."
         val early = Duration.between(readyAt, pickup).toMinutes()
         return if (early >= 0) "약속한 시각보다 ${early}분 먼저 준비됐어요. 픽업대에서 받아가세요." else "약속보다 늦어져 죄송해요. 픽업대에서 받아가세요."
+    }
+
+    private fun riskBody(p: JsonNode): String {
+        val at = p.path("suggestedPickupAt").takeIf { it.isTextual }?.asText()?.let(Instant::parse)
+            ?: return "조금 늦어져 죄송해요. 준비되면 바로 알려 드릴게요."
+        val walk = p.path("walkMinutes").takeIf { it.isInt }?.let { " (도보 ${it.asInt()}분)" } ?: ""
+        return "${p.path("suggestedStoreName").asText()}${walk}에서 ${kst(at)}에 받을 수 있어요. 앱에서 한 번 눌러 옮기면 결제는 그대로예요."
     }
 
     private fun transferFailedBody(reason: String): String = when (reason) {

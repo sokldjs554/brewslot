@@ -285,8 +285,8 @@ paths:
                 toStoreId: { type: integer, format: int64, example: 103 }
                 pickupAt: { type: string, format: date-time }
       responses:
-        '202': { description: 요청됨 (새 매장 수락 대기), content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } } }
-        '200': { description: 멱등 재요청 — 처음 요청의 현재 상태, content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } } }
+        '200': { description: '자동 수락 매장이라 바로 옮겨짐(COMPLETED) 또는 멱등 재요청 — 처음 요청의 현재 상태', content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } } }
+        '202': { description: 요청됨 (새 매장 직원 수락 대기), content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } } }
         '409': { description: '제조 시작 · 이미 변경함 · 진행 중(transfer-*) 또는 새 매장 그 시각 불가(pickup-slot-unavailable + alternatives)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/SlotUnavailableProblem' } } } }
         '422': { description: 다른 브랜드 · 같은 음료를 같은 가격에 팔지 않음(transfer-menu-incompatible), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
 
@@ -368,6 +368,7 @@ components:
                   storeId: { type: integer, format: int64 }
                   storeName: { type: string }
                   pickupAt: { type: string, format: date-time }
+                  walkMinutes: { type: integer }
                   items: { type: array, items: { type: object, properties: { menuItemId: { type: integer, format: int64 }, quantity: { type: integer } } } }
     Store:
       type: object
@@ -453,6 +454,22 @@ components:
         pickedUpAt: { type: string, format: date-time }
         cancelledAt: { type: string, format: date-time }
         cancelReason: { type: string, enum: [HOLD_EXPIRED, POINTS_INSUFFICIENT, COUPON_REJECTED, PAYMENT_DECLINED, PAYMENT_TIMEOUT, CUSTOMER_CANCELLED, REJECTED_BY_STORE] }
+        pickupRisk:
+          nullable: true
+          description: 매장이 밀려 약속 시각을 못 지킬 것 같을 때만 (결제 후 제조 전). 옮길 만한 근처 매장이 있으면 suggestion
+          type: object
+          properties:
+            expectedDelayMinutes: { type: integer }
+            expectedReadyAt: { type: string, format: date-time }
+            suggestion:
+              nullable: true
+              type: object
+              properties:
+                storeId: { type: integer, format: int64 }
+                storeName: { type: string }
+                pickupAt: { type: string, format: date-time }
+                walkMinutes: { type: integer }
+
     OrderSummary:
       type: object
       properties:
@@ -530,4 +547,6 @@ components:
               soldOut: { type: array, items: { type: string } }
               priceDiffers: { type: array, items: { type: string } }
               sameTimeAvailable: { type: boolean }
+              walkMinutes: { type: integer, nullable: true, description: 원래 매장에서 도보 시간(분). 15분 넘는 매장은 후보에서 제외 }
+              instant: { type: boolean, description: 자리가 있으면 직원 확인 없이 바로 옮겨지는 매장 }
               nearestTimes: { type: array, items: { type: string, format: date-time }, maxItems: 3 }

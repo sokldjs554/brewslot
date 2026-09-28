@@ -5,6 +5,7 @@ import com.brewslot.order.catalog.domain.ChosenDrink
 import com.brewslot.order.catalog.domain.MenuEquivalence
 import com.brewslot.order.catalog.domain.MenuMatch
 import com.brewslot.order.catalog.domain.Store
+import com.brewslot.order.config.OrderProperties
 import com.brewslot.order.scheduling.application.CartItem
 import com.brewslot.order.scheduling.application.PickupAvailabilityService
 import com.brewslot.order.scheduling.application.SlotReservationService
@@ -23,6 +24,8 @@ data class StoreEvaluation(
     val requestedTimeFeasible: Boolean,
     /** 원하는 시각에 가장 가까운 가능 시각 (요청 시각 제외, 최대 3개) */
     val nearestTimes: List<Instant>,
+    /** 원래 매장에서 도보 시간(분). 위치를 모르면 null */
+    val walkMinutes: Int? = null,
 ) {
     val cart: List<CartItem>
         get() = (match as? MenuMatch.Compatible)?.items?.map { (m, q) -> CartItem(m.id, q) } ?: emptyList()
@@ -37,11 +40,20 @@ class StoreAlternatives(
     private val catalog: CatalogService,
     private val slots: SlotReservationService,
     private val cache: RedisSlotUsageCache,
+    private val props: OrderProperties,
 ) {
+    /**
+     * 같은 브랜드 매장 중 원래 매장에서 걸어갈 수 있는 곳(기본 15분 이내)만, 가까운 순으로.
+     * 고객은 멀리 있는 매장보다 조금 늦더라도 원래 매장을 고른다 — 제안이 많을수록 좋은 것이 아니다.
+     */
     fun evaluateOthers(source: Store, drinks: List<ChosenDrink>, requested: Instant, now: Instant): List<StoreEvaluation> =
         catalog.storeIdsOfBrand(source.brandId)
             .filter { it != source.id }
-            .map { evaluate(catalog.store(it), drinks, requested, now) }
+            .map { catalog.store(it) }
+            .map { it to source.walkMinutesTo(it) }
+            .filter { (_, walk) -> walk == null || walk <= props.maxWalkMinutes }
+            .sortedBy { (_, walk) -> walk ?: Int.MAX_VALUE }
+            .map { (store, walk) -> evaluate(store, drinks, requested, now).copy(walkMinutes = walk) }
 
     fun evaluate(target: Store, drinks: List<ChosenDrink>, requested: Instant, now: Instant): StoreEvaluation {
         val match = MenuEquivalence.match(drinks, target)

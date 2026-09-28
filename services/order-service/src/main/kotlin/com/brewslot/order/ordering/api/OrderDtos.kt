@@ -64,9 +64,11 @@ data class OrderResponse(
     val pickedUpAt: Instant?,
     val cancelledAt: Instant?,
     val cancelReason: String?,
+    /** 매장이 밀려 약속 시각을 못 지킬 것 같을 때만. 옮길 만한 근처 매장이 있으면 suggestion 이 있다 */
+    val pickupRisk: PickupRiskResponse? = null,
 ) {
     companion object {
-        fun of(o: Order) = OrderResponse(
+        fun of(o: Order, risk: PickupRiskResponse? = null) = OrderResponse(
             orderId = o.id.toString(),
             status = o.status.name,
             storeId = o.storeId,
@@ -84,8 +86,18 @@ data class OrderResponse(
             pickedUpAt = o.pickedUpAt,
             cancelledAt = o.cancelledAt,
             cancelReason = o.cancelReason?.name,
+            pickupRisk = risk,
         )
     }
 }
+
+data class PickupSuggestion(val storeId: Long, val storeName: String, val pickupAt: Instant, val walkMinutes: Int?)
+
+data class PickupRiskResponse(
+    val expectedDelayMinutes: Int,
+    /** 원래 매장에서 기다리면 예상 준비 시각 */
+    val expectedReadyAt: Instant,
+    val suggestion: PickupSuggestion?,
+)
 
 data class StoreStatusRequest(val status: com.brewslot.order.ordering.application.StoreAction)

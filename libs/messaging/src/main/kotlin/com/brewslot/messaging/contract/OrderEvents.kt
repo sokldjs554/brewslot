@@ -112,3 +112,21 @@ data class OrderTransferFailed(
     val reason: String,
     val failedAt: Instant,
 )
+
+/**
+ * 매장이 밀려 약속한 픽업 시각을 못 지킬 것 같다 — 고객이 앱을 열기 전에 먼저 알린다(주문당 한 번).
+ * 옮길 만한 근처 매장이 있으면 함께 제안하고, 고객은 한 번 눌러 옮긴다.
+ */
+data class PickupAtRisk(
+    val orderId: String,
+    val memberId: Long,
+    val storeId: Long,
+    val storeName: String,
+    val promisedPickupAt: Instant,
+    val expectedDelayMinutes: Int,
+    val suggestedStoreId: Long?,
+    val suggestedStoreName: String?,
+    val suggestedPickupAt: Instant?,
+    val walkMinutes: Int?,
+    val detectedAt: Instant,
+)

@@ -59,6 +59,10 @@ data class TransferCandidate(
     val priceDiffers: List<String>,
     val sameTimeAvailable: Boolean,
     val nearestTimes: List<Instant>,
+    /** 원래 매장에서 도보 시간(분) */
+    val walkMinutes: Int?,
+    /** 자리가 있으면 바로 옮겨진다(직원 확인 없음) */
+    val instant: Boolean,
 )
 
 data class TransferOptions(
@@ -114,6 +118,8 @@ class StoreTransferService(
                 priceDiffers = inc?.priceDiffers ?: emptyList(),
                 sameTimeAvailable = e.requestedTimeFeasible,
                 nearestTimes = e.nearestTimes,
+                walkMinutes = e.walkMinutes,
+                instant = e.store.autoAcceptTransfers,
             )
         }
         return TransferOptions(order.id, order.storeId, order.promisedPickupAt, blocked == null, blocked, candidates)
@@ -159,6 +165,8 @@ class StoreTransferService(
                     slots.reserve(target, transfer.id, cmd.pickupAt, demands, now)
                     transfers.insert(transfer, cmd.idempotencyKey, cmd.fingerprint())
                     count("requested")
+                    // 자동 수락 매장: 자리를 잡은 같은 트랜잭션에서 바로 옮긴다 → 고객은 기다리지 않는다
+                    if (target.autoAcceptTransfers) move(locked, transfer, now)
                     TransferResult(transfer, replayed = false)
                 }!!
             } catch (e: SlotRaceLostException) {
@@ -192,6 +200,11 @@ class StoreTransferService(
             fail(t, now) { it.abort(TransferFailReason.ORIGINAL_STORE_STARTED, now) }
             return@decide
         }
+        move(order, t, now)
+    }
+
+    /** 원래 자리 해제 → 새 자리를 주문으로 → 주문 매장 · 항목 · 약속 시각 변경 → OrderTransferred (호출자 트랜잭션 안) */
+    private fun move(order: Order, t: StoreTransfer, now: Instant) {
         val fromStoreId = order.storeId
         order.transferTo(t.toStoreId, t.newLines, t.pickupAt)
         check(slots.transferReservation(fromStoreId, order.id, t.id, now)) { "transfer hold ${t.id} not found" }

@@ -13,4 +13,10 @@ data class OrderProperties(
     val maxReservationAttempts: Int = 3,
     /** 매장 변경 요청에 새 매장이 답해야 하는 기한. 넘기면 새 자리를 풀고 원래 주문을 유지한다. */
     val transferAcceptTimeout: Duration = Duration.ofMinutes(2),
+    /** 다른 매장을 제안할 때 원래 매장에서 걸어갈 수 있는 최대 시간(분) */
+    val maxWalkMinutes: Int = 15,
+    /** 매장이 이만큼 밀리면(준비됐어야 할 주문이 아직 안 나옴) 곧 받을 고객에게 먼저 알린다 */
+    val delayAlertMinutes: Int = 5,
+    /** 지연 안내 대상: 지금부터 이 시간 안에 받을 주문 */
+    val delayAlertHorizon: Duration = Duration.ofMinutes(45),
 )

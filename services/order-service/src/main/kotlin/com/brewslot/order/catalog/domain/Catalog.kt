@@ -65,6 +65,12 @@ data class Store(
     val closeTime: LocalTime,
     val capacity: CapacityProfile,
     val menu: List<MenuItem>,
+    val location: GeoPoint? = null,
+    /** 자리가 있으면 매장 변경 요청을 직원 확인 없이 바로 수락한다 */
+    val autoAcceptTransfers: Boolean = false,
 ) {
+    /** 이 매장에서 [other] 까지 도보 시간(분). 위치를 모르면 null */
+    fun walkMinutesTo(other: Store): Int? = location?.let { a -> other.location?.let { a.walkMinutesTo(it) } }
+
     fun menuItem(id: Long): MenuItem? = menu.firstOrNull { it.id == id }
 }

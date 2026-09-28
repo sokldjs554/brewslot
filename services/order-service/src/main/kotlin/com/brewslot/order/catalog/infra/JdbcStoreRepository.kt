@@ -2,6 +2,7 @@ package com.brewslot.order.catalog.infra
 
 import com.brewslot.common.Money
 import com.brewslot.order.catalog.domain.CapacityProfile
+import com.brewslot.order.catalog.domain.GeoPoint
 import com.brewslot.order.catalog.domain.MenuItem
 import com.brewslot.order.catalog.domain.Station
 import com.brewslot.order.catalog.domain.Store
@@ -16,7 +17,8 @@ class JdbcStoreRepository(private val jdbc: JdbcClient) {
     fun findById(storeId: Long): Store? {
         val header = jdbc.sql(
             """
-            SELECT id, brand_id, name, open_time, close_time, slot_minutes, min_lead_minutes, max_advance_minutes
+            SELECT id, brand_id, name, open_time, close_time, slot_minutes, min_lead_minutes, max_advance_minutes,
+                   latitude, longitude, auto_accept_transfers
             FROM store WHERE id = :id
             """.trimIndent(),
         ).param("id", storeId).query { rs, _ ->
@@ -29,6 +31,8 @@ class JdbcStoreRepository(private val jdbc: JdbcClient) {
                 slotMinutes = rs.getInt("slot_minutes"),
                 minLead = rs.getInt("min_lead_minutes"),
                 maxAdvance = rs.getInt("max_advance_minutes"),
+                location = rs.getObject("latitude")?.let { GeoPoint(rs.getDouble("latitude"), rs.getDouble("longitude")) },
+                autoAccept = rs.getBoolean("auto_accept_transfers"),
             )
         }.optional().orElse(null) ?: return null
 
@@ -64,6 +68,8 @@ class JdbcStoreRepository(private val jdbc: JdbcClient) {
             closeTime = header.closeTime,
             capacity = CapacityProfile(header.slotMinutes, units, header.minLead, header.maxAdvance),
             menu = menu,
+            location = header.location,
+            autoAcceptTransfers = header.autoAccept,
         )
     }
 
@@ -98,5 +104,7 @@ class JdbcStoreRepository(private val jdbc: JdbcClient) {
         val slotMinutes: Int,
         val minLead: Int,
         val maxAdvance: Int,
+        val location: GeoPoint?,
+        val autoAccept: Boolean,
     )
 }

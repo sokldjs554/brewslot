@@ -71,7 +71,14 @@ class StoreTransferController(private val transfers: StoreTransferService) {
         @RequestBody request: TransferRequest,
     ): ResponseEntity<TransferResponse> {
         val result = transfers.request(RequestTransferCommand(memberId, orderId, request.toStoreId, request.pickupAt, idempotencyKey))
-        val builder = if (result.replayed) ResponseEntity.ok() else ResponseEntity.status(HttpStatus.ACCEPTED)
+        // 자동 수락 매장이면 이 응답에서 이미 COMPLETED(200), 새 매장 확인이 필요하면 AWAITING_STORE(202)
+        val builder = if (result.replayed ||
+            result.transfer.status == TransferStatus.COMPLETED
+        ) {
+            ResponseEntity.ok()
+        } else {
+            ResponseEntity.status(HttpStatus.ACCEPTED)
+        }
         return builder
             .location(URI.create("/orders/$orderId/transfers/${result.transfer.id}"))
             .header("Idempotent-Replayed", result.replayed.toString())

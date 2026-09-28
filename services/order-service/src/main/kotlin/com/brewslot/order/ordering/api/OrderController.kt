@@ -1,9 +1,13 @@
 package com.brewslot.order.ordering.api
 
+import com.brewslot.order.catalog.application.CatalogService
 import com.brewslot.order.ordering.application.OrderLifecycleService
 import com.brewslot.order.ordering.application.PlaceOrderCommand
 import com.brewslot.order.ordering.application.PlaceOrderService
+import com.brewslot.order.ordering.domain.OrderStatus
+import com.brewslot.order.ordering.domain.PickupDelay
 import com.brewslot.order.ordering.infra.JdbcOrderRepository
+import com.brewslot.order.ordering.infra.JdbcPickupRiskRepository
 import com.brewslot.order.ordering.saga.CheckoutSagaOrchestrator
 import com.brewslot.order.query.ReorderService
 import com.brewslot.web.NotFoundException
@@ -37,6 +41,8 @@ class OrderController(
     private val lifecycle: OrderLifecycleService,
     private val reorders: ReorderService,
     private val orders: JdbcOrderRepository,
+    private val risks: JdbcPickupRiskRepository,
+    private val catalog: CatalogService,
 ) {
     @Operation(summary = "주문 생성 (픽업 슬롯 임시 점유)")
     @PostMapping
@@ -67,7 +73,15 @@ class OrderController(
         @PathVariable orderId: UUID,
     ): OrderResponse {
         val order = orders.findById(orderId)?.takeIf { it.memberId == memberId } ?: throw NotFoundException("order", orderId)
-        return OrderResponse.of(order)
+        // 지연 안내는 아직 원래 매장에서 만들기 전(PAID)일 때만 의미가 있다
+        val risk = risks.find(order.id)?.takeIf { order.status == OrderStatus.PAID && it.storeId == order.storeId }?.let { r ->
+            PickupRiskResponse(
+                r.delayMinutes,
+                PickupDelay.expectedReadyAt(order.promisedPickupAt, r.delayMinutes),
+                r.suggestedStoreId?.let { PickupSuggestion(it, catalog.store(it).name, r.suggestedPickupAt!!, r.walkMinutes) },
+            )
+        }
+        return OrderResponse.of(order, risk)
     }
 
     @Operation(summary = "결제 시작 (비동기 Saga). 결과는 GET /orders/{orderId} 로 확인")

@@ -305,7 +305,7 @@ class StoreTransferIntegrationTest : OrderIntegrationTest() {
         val rejected = place(40, pickup, 1003L to 1)
         assertThat(rejected.statusCode).isEqualTo(HttpStatus.CONFLICT)
         val nearby = (rejected.body!!["nearbyStores"] as List<*>).map { it as Map<*, *> }
-        assertThat(nearby.map { it["storeId"] }).containsExactlyInAnyOrder(102, 103)
+        assertThat(nearby.map { it["storeId"] }).containsExactly(104, 103, 102) // 걸어서 가까운 순
         val samseong = nearby.single { it["storeId"] == 103 }
         assertThat(samseong["pickupAt"]).isEqualTo(pickup.toString())
         assertThat(samseong["items"]).isEqualTo(listOf(mapOf("menuItemId" to 4003, "quantity" to 1)))
