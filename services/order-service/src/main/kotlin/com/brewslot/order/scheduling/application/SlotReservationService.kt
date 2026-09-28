@@ -27,10 +27,12 @@ import java.util.UUID
 class SlotRaceLostException : RuntimeException("slot capacity changed concurrently")
 
 class SlotUnavailableException(
-    requested: Instant,
-    bottleneck: String,
-    reason: String,
-    alternatives: List<Instant>,
+    val requested: Instant,
+    val bottleneck: String,
+    val reason: String,
+    val alternatives: List<Instant>,
+    /** 같은 브랜드의 다른 매장 중 원하는 시각 그대로 가능한 곳 (주문 시에만 채운다) */
+    val nearbyStores: List<Map<String, Any>> = emptyList(),
 ) : ConflictException(
         type = "pickup-slot-unavailable",
         message = "요청한 픽업 시각($requested)에는 제조 용량이 부족합니다.",
@@ -39,8 +41,11 @@ class SlotUnavailableException(
             "bottleneckStation" to bottleneck,
             "reason" to reason,
             "alternatives" to alternatives.map { it.toString() },
+            "nearbyStores" to nearbyStores,
         ),
-    )
+    ) {
+    fun withNearbyStores(stores: List<Map<String, Any>>) = SlotUnavailableException(requested, bottleneck, reason, alternatives, stores)
+}
 
 @Service
 class SlotReservationService(
@@ -123,6 +128,12 @@ class SlotReservationService(
     fun release(storeId: Long, orderId: UUID, now: Instant) {
         val keys = ledger.release(orderId, now)
         refreshCacheAfterCommit(storeId, keys)
+    }
+
+    /** 매장 변경 확정: 원래 매장 자리를 풀고, 새 매장에 잡아 둔 자리([transferId])를 주문의 확정 예약으로 넘긴다. */
+    fun transferReservation(fromStoreId: Long, orderId: UUID, transferId: UUID, now: Instant): Boolean {
+        release(fromStoreId, orderId, now)
+        return ledger.handOver(transferId, orderId, now)
     }
 
     fun alternatives(store: Store, requested: Instant, demands: List<DrinkDemand>, now: Instant): List<Instant> {

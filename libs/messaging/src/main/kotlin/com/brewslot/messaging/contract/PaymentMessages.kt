@@ -17,6 +17,8 @@ data class ChargePayment(
 data class RefundPayment(
     val orderId: String,
     val reason: String,
+    /** 추가 필드(하위 호환): 환불을 부담하는 현재 매장. 매장 변경된 주문은 결제 때 매장과 다르다. null 이면 결제 때 매장. */
+    val storeId: Long? = null,
 )
 
 // payment.events (발행: payment-service)

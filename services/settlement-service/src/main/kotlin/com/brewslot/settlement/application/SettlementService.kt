@@ -85,8 +85,10 @@ class SettlementService(
             val id = jdbc.sql(
                 """
                 INSERT INTO settlement_statement (store_id, settlement_date, card_sales, card_refunds, point_sales, point_reversals,
-                    coupon_sales, coupon_reversals, net_sales, pg_fee, platform_fee, payout, entry_count, carried_over_count, created_at)
-                VALUES (:storeId, :date, :cs, :cr, :ps, :pr, :cps, :cpr, :net, :pgFee, :platformFee, :payout, :cnt, :carried, :now)
+                    coupon_sales, coupon_reversals, transfers_in, transfers_out, net_sales, pg_fee, platform_fee, payout, entry_count,
+                    carried_over_count, created_at)
+                VALUES (:storeId, :date, :cs, :cr, :ps, :pr, :cps, :cpr, :tin, :tout, :net, :pgFee, :platformFee, :payout, :cnt,
+                    :carried, :now)
                 RETURNING id
                 """.trimIndent(),
             )
@@ -98,6 +100,8 @@ class SettlementService(
                 .param("pr", draft.pointReversals)
                 .param("cps", draft.couponSales)
                 .param("cpr", draft.couponReversals)
+                .param("tin", draft.transfersIn)
+                .param("tout", draft.transfersOut)
                 .param("net", draft.netSales)
                 .param("pgFee", draft.pgFee)
                 .param("platformFee", draft.platformFee)

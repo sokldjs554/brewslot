@@ -48,6 +48,20 @@ class NotificationMapperTest {
     }
 
     @Test
+    fun `매장 변경은 새 픽업 시각을, 실패는 원래 주문이 그대로라는 것을 알려 준다`() {
+        val moved = NotificationMapper.from(
+            "e", "OrderTransferred", at,
+            payload("orderId" to "o", "memberId" to 1, "promisedPickupAt" to "2026-09-28T00:45:00Z"),
+        )!!
+        val refused = NotificationMapper.from(
+            "e", "OrderTransferFailed", at,
+            payload("orderId" to "o", "memberId" to 1, "reason" to "REFUSED_BY_STORE"),
+        )!!
+        assertThat(moved.body).contains("09:45")
+        assertThat(refused.body).contains("원래 매장 주문은 그대로")
+    }
+
+    @Test
     fun `알림이 필요 없는 이벤트와 회원을 모르는 이벤트는 무시한다`() {
         assertThat(NotificationMapper.from("e", "OrderPlaced", at, payload("orderId" to "o", "memberId" to 1))).isNull()
         assertThat(NotificationMapper.from("e", "OrderPreparing", at, payload("orderId" to "o"))).isNull() // 구버전 이벤트(memberId 없음)

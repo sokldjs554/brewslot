@@ -25,6 +25,8 @@ import java.util.UUID
 data class PaymentResponse(
     val paymentId: String,
     val orderId: String,
+    /** 매출이 귀속되는 매장 (매장 변경된 주문은 환불 시점에 새 매장으로 바뀐다) */
+    val storeId: Long,
     val amount: Long,
     val status: String,
     val pgTransactionId: String?,
@@ -36,6 +38,7 @@ data class PaymentResponse(
         fun of(p: Payment) = PaymentResponse(
             p.id.toString(),
             p.orderId.toString(),
+            p.storeId,
             p.amount,
             p.status.name,
             p.pgTransactionId,

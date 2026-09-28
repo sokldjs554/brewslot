@@ -11,6 +11,12 @@ enum class EntryKind(val isCard: Boolean) {
     POINT_REVERSAL(false),
     COUPON_SALE(false),
     COUPON_REVERSAL(false),
+
+    /** 매장 변경으로 빠져나간 매출(음수). pg_fee 도 음수로 함께 옮긴다. */
+    TRANSFER_OUT(false),
+
+    /** 매장 변경으로 들어온 매출(양수) */
+    TRANSFER_IN(false),
 }
 
 data class SettlementEntry(
@@ -37,6 +43,8 @@ data class StatementDraft(
     val carriedOverCount: Int,
     val couponSales: Long = 0,
     val couponReversals: Long = 0,
+    val transfersIn: Long = 0,
+    val transfersOut: Long = 0,
 )
 
 /**
@@ -76,6 +84,8 @@ object SettlementCalculator {
             carriedOverCount = entries.count { it.businessDate.isBefore(settlementDate) },
             couponSales = sum(EntryKind.COUPON_SALE),
             couponReversals = sum(EntryKind.COUPON_REVERSAL),
+            transfersIn = sum(EntryKind.TRANSFER_IN),
+            transfersOut = sum(EntryKind.TRANSFER_OUT),
         )
     }
 }

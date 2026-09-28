@@ -39,6 +39,10 @@ object NotificationMapper {
             "OrderReady" -> "음료가 준비됐어요" to readyBody(pickup, p.path("readyAt").asText(null)?.let(Instant::parse))
             "OrderPickedUp" -> "맛있게 드세요" to "픽업이 완료됐어요. 포인트는 곧 적립돼요."
             "OrderCancelled" -> "주문이 취소됐어요" to cancelBody(p.path("reason").asText(), p.path("wasPaid").asBoolean())
+            "OrderTransferred" ->
+                "픽업 매장이 바뀌었어요" to
+                    "결제 · 쿠폰 · 포인트는 그대로예요. 새 매장에서 ${pickup?.let(::kst) ?: "약속한 시각"}에 받아가세요."
+            "OrderTransferFailed" -> "매장 변경이 이뤄지지 않았어요" to transferFailedBody(p.path("reason").asText())
             else -> return null
         }
         return Notification("${occurredAt.toEpochMilli()}:$eventId", memberId, orderId, eventType, title, body, occurredAt)
@@ -49,6 +53,18 @@ object NotificationMapper {
         val early = Duration.between(readyAt, pickup).toMinutes()
         return if (early >= 0) "약속한 시각보다 ${early}분 먼저 준비됐어요. 픽업대에서 받아가세요." else "약속보다 늦어져 죄송해요. 픽업대에서 받아가세요."
     }
+
+    private fun transferFailedBody(reason: String): String = when (reason) {
+        "REFUSED_BY_STORE" -> "새 매장이 주문을 받지 못했어요. 원래 매장 주문은 그대로 진행돼요."
+        "STORE_DID_NOT_RESPOND" -> "새 매장의 응답이 없어 변경을 취소했어요. 원래 매장 주문은 그대로 진행돼요."
+        "ORIGINAL_STORE_STARTED" -> "원래 매장에서 이미 음료를 만들기 시작했어요. 원래 매장에서 받아가세요."
+        else -> "원래 주문 상태를 확인해 주세요."
+    }
+
+    private fun kst(at: Instant): String = HH_MM.format(at.atZone(KST))
+
+    private val KST = java.time.ZoneId.of("Asia/Seoul")
+    private val HH_MM = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
 
     private fun cancelBody(reason: String, wasPaid: Boolean): String = when (reason) {
         "PAYMENT_DECLINED" -> "카드 승인이 거절됐어요. 사용한 쿠폰·포인트는 돌려드렸어요."

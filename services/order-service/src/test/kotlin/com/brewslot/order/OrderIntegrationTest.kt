@@ -23,6 +23,7 @@ import java.time.Instant
         "spring.config.name=order-service",
         // 시간 기반 잡은 테스트가 직접 호출한다
         "brewslot.order.expiry-poll-ms=3600000",
+        "brewslot.order.transfer-poll-ms=3600000",
     ],
 )
 @Import(OrderIntegrationTest.TestClockConfig::class)

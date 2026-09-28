@@ -63,10 +63,10 @@ class IllegalOrderTransitionException(val from: OrderStatus, val action: String)
 class Order private constructor(
     val id: UUID,
     val memberId: Long,
-    val storeId: Long,
+    storeId: Long,
     val brandId: Long,
-    val lines: List<OrderLine>,
-    val promisedPickupAt: Instant,
+    lines: List<OrderLine>,
+    promisedPickupAt: Instant,
     val pointAmount: Money,
     val holdExpiresAt: Instant,
     val createdAt: Instant,
@@ -85,6 +85,14 @@ class Order private constructor(
     /** 낙관적 잠금 버전. 저장소가 UPDATE 성공 시 올린다. */
     var version: Long = version
         internal set
+
+    /** 제조 · 픽업 매장. 결제 후 매장 변경([transferTo])으로 한 번 바뀔 수 있다. */
+    var storeId: Long = storeId
+        private set
+    var lines: List<OrderLine> = lines
+        private set
+    var promisedPickupAt: Instant = promisedPickupAt
+        private set
 
     var status: OrderStatus = status
         private set
@@ -138,6 +146,20 @@ class Order private constructor(
         requireStatus("픽업 완료", OrderStatus.READY)
         status = OrderStatus.PICKED_UP
         pickedUpAt = now
+    }
+
+    /**
+     * 결제된 주문을 같은 브랜드의 다른 매장으로 옮긴다. 결제 금액(카드·포인트·쿠폰)은 그대로이므로
+     * 새 매장의 항목 합계가 원래 합계와 같아야 한다. 제조가 시작되면(PREPARING) 옮길 수 없다.
+     */
+    fun transferTo(toStoreId: Long, newLines: List<OrderLine>, newPickupAt: Instant) {
+        requireStatus("매장 변경", OrderStatus.PAID)
+        require(toStoreId != storeId) { "같은 매장으로는 변경할 수 없습니다." }
+        require(newLines.isNotEmpty()) { "주문 항목이 비어 있습니다." }
+        require(newLines.map { it.amount }.sum() == totalAmount) { "매장 변경 후 금액이 결제 금액과 다릅니다." }
+        storeId = toStoreId
+        lines = newLines
+        promisedPickupAt = newPickupAt
     }
 
     fun cancel(reason: CancelReason, now: Instant) {

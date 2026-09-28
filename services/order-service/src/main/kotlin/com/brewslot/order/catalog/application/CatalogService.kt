@@ -18,6 +18,10 @@ class CatalogService(private val stores: JdbcStoreRepository, private val clock:
     @Cacheable(cacheNames = [CACHE_STORE], key = "#storeId")
     fun store(storeId: Long): Store = stores.findById(storeId) ?: throw NotFoundException("store", storeId)
 
+    /** 같은 브랜드의 다른 매장 ID (매장 변경 · 다른 매장 제안 후보). 매장 정보 자체는 [store] 캐시로 읽는다. */
+    @Cacheable(cacheNames = [CACHE_BRAND_STORES], key = "#brandId")
+    fun storeIdsOfBrand(brandId: Long): List<Long> = stores.storeIdsOfBrand(brandId)
+
     @Transactional
     @CacheEvict(cacheNames = [CACHE_STORE], key = "#storeId")
     fun updateStationCapacity(storeId: Long, unitsPerSlot: Map<Station, Int>): Store {
@@ -28,5 +32,6 @@ class CatalogService(private val stores: JdbcStoreRepository, private val clock:
 
     companion object {
         const val CACHE_STORE = "store"
+        const val CACHE_BRAND_STORES = "brand-stores"
     }
 }

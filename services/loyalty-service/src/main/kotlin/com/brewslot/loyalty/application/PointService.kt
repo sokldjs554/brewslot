@@ -172,15 +172,37 @@ class PointService(
     }
 
     /**
-     * 보상. 사용 내역이 없거나 이미 취소됐으면 아무것도 하지 않는다.
-     * 포인트는 차감했던 바로 그 lot 들로, 쿠폰은 유효기간이 남았으면 다시 쓸 수 있는 상태로 되돌린다.
+     * 매장 변경: 포인트 · 쿠폰으로 결제된 금액의 매장 채권을 원래 매장에서 새 매장으로 옮긴다.
+     * 주문당 한 번(원장 유니크 인덱스). 사용 취소와 어느 쪽이 먼저 도착해도 두 분개가 서로 교환 가능해 최종 잔액이 같다.
      */
     @Transactional
-    fun reverseRedemption(orderId: UUID, reason: String) {
+    fun transferClearing(orderId: UUID, memberId: Long, brandId: Long, fromStoreId: Long, toStoreId: Long, amount: Long) {
+        if (amount <= 0 || ledger.findByOrder(orderId, TxType.STORE_TRANSFER) != null) return
+        ledger.record(
+            TxType.STORE_TRANSFER,
+            orderId,
+            memberId,
+            brandId,
+            toStoreId,
+            amount,
+            "매장 변경: $fromStoreId → $toStoreId",
+            Posting.transfer(Accounts.storeClearing(fromStoreId), Accounts.storeClearing(toStoreId), amount),
+            clock.instant(),
+        )
+    }
+
+    /**
+     * 보상. 사용 내역이 없거나 이미 취소됐으면 아무것도 하지 않는다.
+     * 포인트는 차감했던 바로 그 lot 들로, 쿠폰은 유효기간이 남았으면 다시 쓸 수 있는 상태로 되돌린다.
+     * @param currentStoreId 사용 취소를 부담할 현재 매장 (매장 변경된 주문). null 이면 사용 때 매장
+     */
+    @Transactional
+    fun reverseRedemption(orderId: UUID, reason: String, currentStoreId: Long? = null) {
         val redeem = ledger.findByOrder(orderId, TxType.REDEEM)
         val couponTx = ledger.findByOrder(orderId, TxType.COUPON_REDEEM)
         val base = redeem ?: couponTx ?: return
         if (ledger.findByOrder(orderId, TxType.REVERSE_REDEEM) != null || ledger.findByOrder(orderId, TxType.REVERSE_COUPON) != null) return
+        val storeId = currentStoreId ?: base.storeId!!
         val now = clock.instant()
         ledger.lockWallet(base.memberId, base.brandId, now)
         if (redeem != null) {
@@ -189,11 +211,11 @@ class PointService(
                 orderId,
                 redeem.memberId,
                 redeem.brandId,
-                redeem.storeId,
+                storeId,
                 redeem.amount,
                 "사용 취소: $reason",
                 Posting.transfer(
-                    Accounts.storeClearing(redeem.storeId!!),
+                    Accounts.storeClearing(storeId),
                     Accounts.memberWallet(redeem.memberId, redeem.brandId),
                     redeem.amount,
                 ),
@@ -210,10 +232,10 @@ class PointService(
                 orderId,
                 couponTx.memberId,
                 couponTx.brandId,
-                couponTx.storeId,
+                storeId,
                 couponTx.amount,
                 "쿠폰 사용 취소: $reason",
-                Posting.transfer(Accounts.storeClearing(couponTx.storeId!!), Accounts.brandPromotion(couponTx.brandId), couponTx.amount),
+                Posting.transfer(Accounts.storeClearing(storeId), Accounts.brandPromotion(couponTx.brandId), couponTx.amount),
                 now,
             )
             restoredCoupon = coupons.findByOrderForUpdate(orderId)
@@ -229,7 +251,7 @@ class PointService(
                 orderId.toString(),
                 base.memberId,
                 base.brandId,
-                base.storeId!!,
+                storeId,
                 redeem?.amount ?: 0,
                 now,
                 restoredCoupon?.id?.toString(),

@@ -7,9 +7,12 @@ import com.brewslot.messaging.contract.OrderPickedUp
 import com.brewslot.messaging.contract.OrderPlaced
 import com.brewslot.messaging.contract.OrderPreparing
 import com.brewslot.messaging.contract.OrderReady
+import com.brewslot.messaging.contract.OrderTransferFailed
+import com.brewslot.messaging.contract.OrderTransferred
 import com.brewslot.messaging.contract.OrderedItem
 import com.brewslot.messaging.outbox.Outbox
 import com.brewslot.order.ordering.domain.Order
+import com.brewslot.order.ordering.domain.StoreTransfer
 import org.springframework.stereotype.Component
 
 /** 도메인 상태 → 공개 계약(Published Language) 변환 후 Outbox 적재. */
@@ -61,6 +64,31 @@ class OrderEvents(private val outbox: Outbox) {
     fun cancelled(o: Order) = publish(
         o,
         OrderCancelled(o.id.toString(), o.memberId, o.storeId, o.brandId, o.cancelReason!!.name, o.wasPaid, o.cancelledAt!!),
+    )
+
+    fun transferred(o: Order, t: StoreTransfer) = publish(
+        o,
+        OrderTransferred(
+            o.id.toString(),
+            o.memberId,
+            o.brandId,
+            t.fromStoreId,
+            t.toStoreId,
+            t.previousPickupAt,
+            o.promisedPickupAt,
+            o.totalAmount.won,
+            o.cardAmount.won,
+            o.pointAmount.won,
+            o.couponAmount.won,
+            items(o),
+            t.decidedAt!!,
+        ),
+    )
+
+    fun transferFailed(t: StoreTransfer) = outbox.publish(
+        Topics.ORDER_EVENTS,
+        t.orderId.toString(),
+        OrderTransferFailed(t.orderId.toString(), t.memberId, t.fromStoreId, t.toStoreId, t.failReason!!.name, t.decidedAt!!),
     )
 
     private fun items(o: Order) = o.lines.map { OrderedItem(it.menuItemId, it.name, it.quantity, it.unitPrice.won) }

@@ -80,3 +80,35 @@ data class OrderCancelled(
     val wasPaid: Boolean,
     val cancelledAt: Instant,
 )
+
+/**
+ * 결제된 주문이 같은 브랜드의 다른 매장으로 옮겨졌다(새 매장 수락 시점).
+ * 결제 금액은 바뀌지 않고 "어느 매장의 매출인가" 만 바뀐다 → 정산은 매출을 원래 매장에서 새 매장으로 옮기고,
+ * 포인트 원장은 매장 채권(clearing)을 옮긴다.
+ */
+data class OrderTransferred(
+    val orderId: String,
+    val memberId: Long,
+    val brandId: Long,
+    val fromStoreId: Long,
+    val toStoreId: Long,
+    val previousPickupAt: Instant,
+    val promisedPickupAt: Instant,
+    val totalAmount: Long,
+    val cardAmount: Long,
+    val pointAmount: Long,
+    val couponAmount: Long,
+    val items: List<OrderedItem>,
+    val transferredAt: Instant,
+)
+
+/** 매장 변경이 이뤄지지 않았다. 원래 주문은 원래 매장에서 그대로 유효하다. (고객 알림용) */
+data class OrderTransferFailed(
+    val orderId: String,
+    val memberId: Long,
+    val fromStoreId: Long,
+    val toStoreId: Long,
+    /** REFUSED_BY_STORE | STORE_DID_NOT_RESPOND | ORIGINAL_STORE_STARTED | ORDER_CANCELLED */
+    val reason: String,
+    val failedAt: Instant,
+)

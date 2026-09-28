@@ -10,6 +10,9 @@ import org.springframework.stereotype.Repository
 
 @Repository
 class JdbcStoreRepository(private val jdbc: JdbcClient) {
+    fun storeIdsOfBrand(brandId: Long): List<Long> =
+        jdbc.sql("SELECT id FROM store WHERE brand_id = :brandId ORDER BY id").param("brandId", brandId).query(Long::class.java).list()
+
     fun findById(storeId: Long): Store? {
         val header = jdbc.sql(
             """

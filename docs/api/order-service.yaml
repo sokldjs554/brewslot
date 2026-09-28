@@ -258,10 +258,80 @@ paths:
           description: OK
           content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ReorderSuggestion' } } } }
 
+  /orders/{orderId}/transfer-options:
+    get:
+      tags: [Store transfer]
+      summary: 매장 변경 후보 (같은 브랜드 매장별 같은 음료·같은 가격 여부, 약속 시각 가능 여부, 가까운 가능 시각)
+      parameters: [{ $ref: '#/components/parameters/MemberId' }, { $ref: '#/components/parameters/OrderId' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TransferOptions' } } } }
+
+  /orders/{orderId}/transfers:
+    post:
+      tags: [Store transfer]
+      summary: 매장 변경 요청 — 새 매장 자리를 먼저 잡고 새 매장 수락을 기다림. 수락 전까지 원래 주문 유지
+      parameters:
+        - $ref: '#/components/parameters/MemberId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toStoreId, pickupAt]
+              properties:
+                toStoreId: { type: integer, format: int64, example: 103 }
+                pickupAt: { type: string, format: date-time }
+      responses:
+        '202': { description: 요청됨 (새 매장 수락 대기), content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } } }
+        '200': { description: 멱등 재요청 — 처음 요청의 현재 상태, content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } } }
+        '409': { description: '제조 시작 · 이미 변경함 · 진행 중(transfer-*) 또는 새 매장 그 시각 불가(pickup-slot-unavailable + alternatives)', content: { application/problem+json: { schema: { $ref: '#/components/schemas/SlotUnavailableProblem' } } } }
+        '422': { description: 다른 브랜드 · 같은 음료를 같은 가격에 팔지 않음(transfer-menu-incompatible), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /orders/{orderId}/transfers/{transferId}:
+    get:
+      tags: [Store transfer]
+      summary: 매장 변경 요청 상태 (응답을 못 받았을 때 다시 확인)
+      parameters:
+        - $ref: '#/components/parameters/MemberId'
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } } }
+
+  /stores/{storeId}/transfer-requests:
+    get:
+      tags: [Store transfer]
+      summary: 새 매장 태블릿 — 수락 대기 중인 매장 변경 요청
+      parameters: [{ $ref: '#/components/parameters/StoreId' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Transfer' } } } } }
+
+  /stores/{storeId}/transfer-requests/{transferId}/acceptance:
+    post:
+      tags: [Store transfer]
+      summary: 새 매장 수락 → 한 트랜잭션에서 원래 자리 해제 · 새 자리 확정 · 주문 매장 변경 (재시도 멱등)
+      parameters: [{ $ref: '#/components/parameters/StoreId' }, { $ref: '#/components/parameters/TransferId' }]
+      responses:
+        '200': { description: COMPLETED, content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /stores/{storeId}/transfer-requests/{transferId}/refusal:
+    post:
+      tags: [Store transfer]
+      summary: 새 매장 거절 → 잡아 둔 자리 해제, 원래 주문 유지
+      parameters: [{ $ref: '#/components/parameters/StoreId' }, { $ref: '#/components/parameters/TransferId' }]
+      responses:
+        '200': { description: REFUSED, content: { application/json: { schema: { $ref: '#/components/schemas/Transfer' } } } }
+        '409': { $ref: '#/components/responses/Problem' }
+
 components:
   parameters:
     StoreId: { name: storeId, in: path, required: true, schema: { type: integer, format: int64 }, example: 101 }
     OrderId: { name: orderId, in: path, required: true, schema: { type: string, format: uuid } }
+    TransferId: { name: transferId, in: path, required: true, schema: { type: string, format: uuid } }
     MemberId: { name: X-Member-Id, in: header, required: true, schema: { type: integer, format: int64 }, description: 게이트웨이가 주입하는 회원 ID }
     IdempotencyKey:
       name: Idempotency-Key
@@ -289,6 +359,16 @@ components:
             bottleneckStation: { type: string, enum: [ESPRESSO, BLENDER, BREW_BAR, UNKNOWN] }
             reason: { type: string, enum: [CAPACITY_EXHAUSTED, NO_PRODUCTION_WINDOW, EXCEEDS_SLOT_CAPACITY, CONTENTION] }
             alternatives: { type: array, items: { type: string, format: date-time }, maxItems: 3 }
+            nearbyStores:
+              description: 같은 브랜드의 다른 매장 중 원하는 시각 그대로 가능한 곳 (주문 시). items 는 그 매장 메뉴 ID 로 바꾼 장바구니
+              type: array
+              items:
+                type: object
+                properties:
+                  storeId: { type: integer, format: int64 }
+                  storeName: { type: string }
+                  pickupAt: { type: string, format: date-time }
+                  items: { type: array, items: { type: object, properties: { menuItemId: { type: integer, format: int64 }, quantity: { type: integer } } } }
     Store:
       type: object
       properties:
@@ -414,3 +494,40 @@ components:
         promiseKeptRate: { type: number, nullable: true, description: 약속한 픽업 시각까지 준비 완료된 비율 }
         averageLatenessSeconds: { type: number, nullable: true }
         pickedUpOrders: { type: integer }
+    Transfer:
+      type: object
+      properties:
+        transferId: { type: string, format: uuid }
+        orderId: { type: string, format: uuid }
+        fromStoreId: { type: integer, format: int64 }
+        toStoreId: { type: integer, format: int64 }
+        previousPickupAt: { type: string, format: date-time }
+        pickupAt: { type: string, format: date-time }
+        status: { type: string, enum: [AWAITING_STORE, COMPLETED, REFUSED, EXPIRED, ABORTED] }
+        failReason: { type: string, nullable: true, enum: [REFUSED_BY_STORE, STORE_DID_NOT_RESPOND, ORIGINAL_STORE_STARTED, ORDER_CANCELLED] }
+        requestedAt: { type: string, format: date-time }
+        deadlineAt: { type: string, format: date-time, description: 새 매장이 이 시각까지 답하지 않으면 EXPIRED }
+        decidedAt: { type: string, format: date-time, nullable: true }
+        items: { type: array, items: { type: object, properties: { menuItemId: { type: integer, format: int64 }, name: { type: string }, quantity: { type: integer }, unitPrice: { type: integer, format: int64 } } } }
+    TransferOptions:
+      type: object
+      properties:
+        orderId: { type: string, format: uuid }
+        currentStoreId: { type: integer, format: int64 }
+        promisedPickupAt: { type: string, format: date-time }
+        transferable: { type: boolean }
+        blockedReason: { type: string, nullable: true, enum: [transfer-not-allowed, transfer-limit-reached, transfer-in-progress] }
+        candidates:
+          type: array
+          items:
+            type: object
+            properties:
+              storeId: { type: integer, format: int64 }
+              storeName: { type: string }
+              compatible: { type: boolean }
+              reason: { type: string, nullable: true, enum: [NOT_SOLD, SOLD_OUT, PRICE_DIFFERS] }
+              notSold: { type: array, items: { type: string } }
+              soldOut: { type: array, items: { type: string } }
+              priceDiffers: { type: array, items: { type: string } }
+              sameTimeAvailable: { type: boolean }
+              nearestTimes: { type: array, items: { type: string, format: date-time }, maxItems: 3 }

@@ -81,6 +81,11 @@ class JdbcPaymentRepository(private val jdbc: JdbcClient) {
         "UPDATE payment SET refund_requested = TRUE, updated_at = :at WHERE order_id = :orderId",
     ).param("at", Timestamp.from(at)).param("orderId", orderId).update() == 1
 
+    /** 매장 변경된 주문: 이후 환불 이벤트가 현재 매장 기준으로 나가도록 귀속 매장을 바꾼다 (PG 거래는 그대로). */
+    fun reassignStore(orderId: UUID, storeId: Long, at: Instant): Boolean = jdbc.sql(
+        "UPDATE payment SET store_id = :storeId, updated_at = :at WHERE order_id = :orderId AND store_id <> :storeId",
+    ).param("storeId", storeId).param("at", Timestamp.from(at)).param("orderId", orderId).update() == 1
+
     fun findUnresolved(olderThan: Instant, limit: Int): List<UUID> = jdbc.sql(
         """
         SELECT order_id FROM payment

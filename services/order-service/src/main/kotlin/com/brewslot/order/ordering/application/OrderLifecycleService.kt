@@ -8,6 +8,7 @@ import com.brewslot.order.ordering.domain.CancelReason
 import com.brewslot.order.ordering.domain.IllegalOrderTransitionException
 import com.brewslot.order.ordering.domain.Order
 import com.brewslot.order.ordering.domain.OrderStatus
+import com.brewslot.order.ordering.domain.TransferFailReason
 import com.brewslot.order.ordering.infra.JdbcOrderRepository
 import com.brewslot.order.scheduling.application.SlotReservationService
 import com.brewslot.web.ConflictException
@@ -24,6 +25,7 @@ import java.util.UUID
 class OrderLifecycleService(
     private val orders: JdbcOrderRepository,
     private val slots: SlotReservationService,
+    private val transfers: StoreTransferService,
     private val events: OrderEvents,
     private val outbox: Outbox,
     private val clock: Clock,
@@ -35,7 +37,11 @@ class OrderLifecycleService(
         val now = clock.instant()
         transition {
             when (target) {
-                StoreAction.PREPARING -> order.accept(now).also { events.preparing(order) }
+                StoreAction.PREPARING -> order.accept(now).also {
+                    // 원래 매장이 먼저 만들기 시작했으면 진행 중인 매장 변경은 중단된다(새 자리 해제, 원래 주문 유지).
+                    transfers.abortOpenTransfer(order, TransferFailReason.ORIGINAL_STORE_STARTED)
+                    events.preparing(order)
+                }
                 StoreAction.READY -> order.markReady(now).also {
                     events.ready(order)
                     recordLateness(order)
@@ -66,13 +72,14 @@ class OrderLifecycleService(
         order.cancel(reason, now)
         if (order.wasPaid) {
             if (order.cardAmount.isPositive) {
-                outbox.publish(Topics.PAYMENT_COMMANDS, order.id.toString(), RefundPayment(order.id.toString(), reason.name))
+                outbox.publish(Topics.PAYMENT_COMMANDS, order.id.toString(), RefundPayment(order.id.toString(), reason.name, order.storeId))
             }
             if (order.hasBenefits) {
-                outbox.publish(Topics.LOYALTY_COMMANDS, order.id.toString(), ReverseRedemption(order.id.toString(), reason.name))
+                outbox.publish(Topics.LOYALTY_COMMANDS, order.id.toString(), ReverseRedemption(order.id.toString(), reason.name, order.storeId))
             }
         }
         slots.release(order.storeId, order.id, now)
+        transfers.abortOpenTransfer(order, TransferFailReason.ORDER_CANCELLED)
         events.cancelled(order)
     }
 

@@ -11,4 +11,6 @@ data class OrderProperties(
     val sagaTimeout: Duration = Duration.ofMinutes(2),
     /** 동시 예약 경합으로 계획이 무효화됐을 때 재계획 횟수 */
     val maxReservationAttempts: Int = 3,
+    /** 매장 변경 요청에 새 매장이 답해야 하는 기한. 넘기면 새 자리를 풀고 원래 주문을 유지한다. */
+    val transferAcceptTimeout: Duration = Duration.ofMinutes(2),
 )

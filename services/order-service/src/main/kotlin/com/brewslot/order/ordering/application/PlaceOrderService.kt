@@ -3,6 +3,7 @@ package com.brewslot.order.ordering.application
 import com.brewslot.common.Money
 import com.brewslot.common.Uuid7
 import com.brewslot.order.catalog.application.CatalogService
+import com.brewslot.order.catalog.domain.ChosenDrink
 import com.brewslot.order.catalog.domain.Store
 import com.brewslot.order.config.OrderProperties
 import com.brewslot.order.ordering.domain.Order
@@ -55,6 +56,7 @@ data class PlaceOrderResult(val order: Order, val replayed: Boolean)
 class PlaceOrderService(
     private val catalog: CatalogService,
     private val slots: SlotReservationService,
+    private val storeAlternatives: StoreAlternatives,
     private val orders: JdbcOrderRepository,
     private val events: OrderEvents,
     private val props: OrderProperties,
@@ -65,7 +67,32 @@ class PlaceOrderService(
     private val tx = TransactionTemplate(transactionManager)
     private val raceRetries = meterRegistry.counter("brewslot.slot.reservation.race_retries")
 
-    fun place(cmd: PlaceOrderCommand): PlaceOrderResult {
+    fun place(cmd: PlaceOrderCommand): PlaceOrderResult = try {
+        placeAtStore(cmd)
+    } catch (e: SlotUnavailableException) {
+        // 원하는 시각이 이 매장에서 안 되면, 같은 브랜드의 다른 매장 중 "그 시각 그대로" 되는 곳도 함께 알려준다.
+        throw e.withNearbyStores(runCatching { nearbyStores(cmd) }.getOrDefault(emptyList()))
+    }
+
+    private fun nearbyStores(cmd: PlaceOrderCommand): List<Map<String, Any>> {
+        val store = catalog.store(cmd.storeId)
+        val drinks = cmd.items.map { item ->
+            val m = store.menuItem(item.menuItemId)!!
+            ChosenDrink(m.name, m.price, item.quantity)
+        }
+        return storeAlternatives.evaluateOthers(store, drinks, cmd.pickupAt, clock.instant())
+            .filter { it.requestedTimeFeasible }
+            .map { e ->
+                mapOf(
+                    "storeId" to e.store.id,
+                    "storeName" to e.store.name,
+                    "pickupAt" to cmd.pickupAt.toString(),
+                    "items" to e.cart.map { mapOf("menuItemId" to it.menuItemId, "quantity" to it.quantity) },
+                )
+            }
+    }
+
+    private fun placeAtStore(cmd: PlaceOrderCommand): PlaceOrderResult {
         replay(cmd)?.let { return it }
 
         val store = catalog.store(cmd.storeId)

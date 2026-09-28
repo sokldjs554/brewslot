@@ -161,6 +161,28 @@ class JdbcCapacityLedger(
         return lines.map { it.key }
     }
 
+    /**
+     * 매장 변경 확정: [fromKey] 로 잡아 둔 (새 매장) 예약을 [toKey](주문 ID) 로 넘기고 CONFIRMED 로 만든다.
+     * 슬롯 용량(reserved)은 이미 반영돼 있으므로 건드리지 않는다. 원래 매장 예약은 호출자가 먼저 [release] 해야 한다.
+     * @return 넘긴 예약이 있었으면 true
+     */
+    fun handOver(fromKey: UUID, toKey: UUID, now: Instant): Boolean {
+        val storeId = jdbc.sql("SELECT store_id FROM slot_reservation WHERE order_id = :from AND status = 'HELD' FOR UPDATE")
+            .param("from", fromKey).query(Long::class.java).optional().orElse(null) ?: return false
+        // 원래 매장 예약 기록(이미 RELEASED)은 주문 ID 를 비워 주기 위해 지운다. 변경 이력은 store_transfer 에 남는다.
+        jdbc.sql("DELETE FROM slot_reservation_line WHERE order_id = :to").param("to", toKey).update()
+        jdbc.sql("DELETE FROM slot_reservation WHERE order_id = :to AND status = 'RELEASED'").param("to", toKey).update()
+        jdbc.sql(
+            """
+            INSERT INTO slot_reservation (order_id, store_id, status, created_at, updated_at)
+            VALUES (:to, :storeId, 'CONFIRMED', :now, :now)
+            """.trimIndent(),
+        ).param("to", toKey).param("storeId", storeId).param("now", Timestamp.from(now)).update()
+        jdbc.sql("UPDATE slot_reservation_line SET order_id = :to WHERE order_id = :from").param("to", toKey).param("from", fromKey).update()
+        jdbc.sql("DELETE FROM slot_reservation WHERE order_id = :from").param("from", fromKey).update()
+        return true
+    }
+
     private fun lockInOrder(storeId: Long, keys: List<SlotKey>): Map<SlotKey, SlotState> {
         val (sql, params) = keyPredicate(keys)
         return jdbc.sql(

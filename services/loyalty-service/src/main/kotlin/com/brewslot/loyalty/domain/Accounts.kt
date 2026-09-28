@@ -46,4 +46,4 @@ class Posting private constructor(val entries: List<Entry>) {
     }
 }
 
-enum class TxType { EARN, GRANT, REDEEM, REVERSE_REDEEM, EXPIRE, COUPON_REDEEM, REVERSE_COUPON }
+enum class TxType { EARN, GRANT, REDEEM, REVERSE_REDEEM, EXPIRE, COUPON_REDEEM, REVERSE_COUPON, STORE_TRANSFER }

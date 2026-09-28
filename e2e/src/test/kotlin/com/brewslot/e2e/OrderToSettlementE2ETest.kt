@@ -229,8 +229,56 @@ class OrderToSettlementE2ETest {
         }
     }
 
+    private fun transferTo(memberId: Long, orderId: String, toStoreId: Long, pickupAt: Instant): String =
+        order.post().uri("/orders/{id}/transfers", orderId).contentType(MediaType.APPLICATION_JSON)
+            .header("X-Member-Id", memberId.toString()).header("Idempotency-Key", "e2e-tr-" + UUID.randomUUID())
+            .body(mapOf("toStoreId" to toStoreId, "pickupAt" to pickupAt.toString()))
+            .retrieve().body(mapType)!!["transferId"].toString()
+
+    private fun acceptAt(storeId: Long, transferId: String) =
+        order.post().uri("/stores/{s}/transfer-requests/{t}/acceptance", storeId, transferId).retrieve().body(mapType)!!
+
+    private fun statusAt(storeId: Long, orderId: String, status: String) = order.put().uri("/stores/{s}/orders/{id}/status", storeId, orderId)
+        .contentType(MediaType.APPLICATION_JSON).body(mapOf("status" to status)).retrieve().body(mapType)!!
+
     @Test
     @Order(6)
+    fun `매장 변경 - 쿠폰·포인트·카드로 결제한 주문을 삼성점으로 옮겨 픽업하고, 옮긴 뒤 취소한 주문은 새 매장 기준으로 환불된다`() {
+        val member = happyMember + 5
+        grant(member, 500)
+        val couponId = claimCoupon(member)
+        val pickup = pickupSoon(50)
+        val orderId = placeWithCoupon(member, pickup, 500, couponId, 1_000, 1004L to 1, 1002L to 1) // 8,500 = 쿠폰 1,000 + 포인트 500 + 카드 7,000
+        pay(member, orderId, "tok_visa")
+        await atMost slow untilAsserted { assertThat(orderOf(member, orderId)["status"]).isEqualTo("PAID") }
+
+        val transferId = transferTo(member, orderId, 103, pickup)
+        assertThat(acceptAt(103, transferId)["status"]).isEqualTo("COMPLETED")
+        val moved = orderOf(member, orderId)
+        assertThat(moved["storeId"]).isEqualTo(103)
+        assertThat(moved["cardAmount"]).isEqualTo(7_000) // 결제는 다시 하지 않는다
+
+        statusAt(103, orderId, "PREPARING")
+        statusAt(103, orderId, "READY")
+        assertThat(statusAt(103, orderId, "PICKED_UP")["status"]).isEqualTo("PICKED_UP")
+        await atMost slow untilAsserted { assertThat(balance(member)).isEqualTo(210) } // 새 매장에서 픽업해도 브랜드 적립(카드 7,000 × 3%)
+
+        // 옮긴 뒤 고객이 취소 → 환불은 새 매장(103) 정산에서 빠진다
+        val other = happyMember + 6
+        val cancelled = place(other, pickupSoon(55), 0, 1004L to 1) // 5,000 카드
+        pay(other, cancelled, "tok_visa")
+        await atMost slow untilAsserted { assertThat(orderOf(other, cancelled)["status"]).isEqualTo("PAID") }
+        acceptAt(103, transferTo(other, cancelled, 103, pickupSoon(55)))
+        order.post().uri("/orders/{id}/cancellation", cancelled).header("X-Member-Id", other.toString()).retrieve().toBodilessEntity()
+        await atMost slow untilAsserted {
+            val p = payment.get().uri("/payments/{id}", cancelled).retrieve().body(mapType)!!
+            assertThat(p["status"]).isEqualTo("REFUNDED")
+            assertThat(p["storeId"]).isEqualTo(103)
+        }
+    }
+
+    @Test
+    @Order(7)
     fun `정산과 대사 - 오늘 거래가 매장 정산서에 반영되고 PG 파일과 불일치가 없다`() {
         val today = BusinessTime.businessDateOf(Instant.now())
 
@@ -251,13 +299,22 @@ class OrderToSettlementE2ETest {
         assertThat((draft["pointSales"] as Number).toLong()).isGreaterThanOrEqualTo(2_000)
         assertThat((draft["couponSales"] as Number).toLong()).isGreaterThanOrEqualTo(1_000) // 브랜드 부담 할인분도 매장 매출
         assertThat((draft["couponReversals"] as Number).toLong()).isLessThanOrEqualTo(0)
+        // 매장 변경: 원래 매장에서 빠져나간 매출은 새 매장으로 들어오고, 옮긴 뒤 취소한 5,000원은 새 매장에서 환불로 빠진다
+        assertThat((draft["transfersOut"] as Number).toLong()).isEqualTo(-13_500)
+        @Suppress("UNCHECKED_CAST")
+        val samseong = statements.map { it["draft"] as Map<String, Any?> }.single { it["storeId"] == 103 }
+        assertThat((samseong["transfersIn"] as Number).toLong()).isEqualTo(13_500)
+        assertThat((samseong["cardRefunds"] as Number).toLong()).isEqualTo(-5_000)
+        assertThat((samseong["netSales"] as Number).toLong()).isEqualTo(8_500)
+        assertThat((samseong["pgFee"] as Number).toLong()).isEqualTo(154L) // 옮겨진 주문의 카드 수수료만 남음
+
         val net = (draft["netSales"] as Number).toLong()
         val payout = (draft["payout"] as Number).toLong()
         assertThat(payout).isEqualTo(net - (draft["pgFee"] as Number).toLong() - (draft["platformFee"] as Number).toLong())
     }
 
     @Test
-    @Order(7)
+    @Order(8)
     fun `재주문 추천 - 픽업 완료한 장바구니가 현재 가격과 가장 빠른 픽업 시각과 함께 추천된다`() {
         await atMost slow untilAsserted {
             val suggestions = order.get().uri("/members/{m}/reorder-suggestions", happyMember)

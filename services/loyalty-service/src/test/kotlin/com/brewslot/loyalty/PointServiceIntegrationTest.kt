@@ -80,6 +80,43 @@ class PointServiceIntegrationTest {
         assertInvariant(m)
     }
 
+    private fun clearing(storeId: Long, orderId: UUID) = jdbc.sql(
+        """
+        SELECT COALESCE(SUM(CASE e.direction WHEN 'C' THEN e.amount ELSE -e.amount END), 0)
+        FROM ledger_entry e JOIN ledger_transaction t ON t.id = e.transaction_id
+        WHERE e.account = :a AND t.order_id = :o
+        """.trimIndent(),
+    ).param("a", "store:$storeId:clearing").param("o", orderId).query(Long::class.java).single()
+
+    @Test
+    fun `매장 변경 - 매장 채권이 새 매장으로 옮겨지고, 옮긴 뒤 사용 취소는 새 매장에서 빠진다 (도착 순서 무관)`() {
+        for (reversalFirst in listOf(false, true)) {
+            val m = memberSeq.incrementAndGet()
+            points.grant(m, 1, 3_000, 30, "웰컴")
+            val orderId = UUID.randomUUID()
+            points.redeem(orderId, m, 1, 101, 2_000)
+            assertThat(clearing(101, orderId)).isEqualTo(2_000)
+
+            // 매장 변경 이벤트와 (새 매장 기준) 사용 취소 명령은 다른 토픽이라 어느 쪽이 먼저 올지 모른다
+            val transfer = { points.transferClearing(orderId, m, 1, 101, 103, 2_000) }
+            val reverse = { points.reverseRedemption(orderId, "CUSTOMER_CANCELLED", 103) }
+            if (reversalFirst) {
+                reverse()
+                transfer()
+            } else {
+                transfer()
+                assertThat(clearing(101, orderId)).isZero()
+                assertThat(clearing(103, orderId)).isEqualTo(2_000)
+                reverse()
+            }
+            transfer() // 중복 이벤트
+            assertThat(clearing(101, orderId)).isZero()
+            assertThat(clearing(103, orderId)).isZero()
+            assertThat(balance(m)).isEqualTo(3_000)
+            assertInvariant(m)
+        }
+    }
+
     @Test
     fun `소멸이 임박한 포인트부터 쓰고, 사용취소 시 원래 lot 으로 돌아간다`() {
         val m = memberSeq.incrementAndGet()

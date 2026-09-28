@@ -40,6 +40,16 @@ class JdbcOrderRepository(private val jdbc: JdbcClient) {
             .param("requestHash", requestHash)
             .param("createdAt", ts(order.createdAt))
             .update()
+        insertLines(order)
+    }
+
+    /** 매장 변경: 주문 항목을 새 매장 메뉴로 교체한다 (금액은 같음 — [Order.transferTo] 가 검증). */
+    fun replaceLines(order: Order) {
+        jdbc.sql("DELETE FROM order_line WHERE order_id = :id").param("id", order.id).update()
+        insertLines(order)
+    }
+
+    private fun insertLines(order: Order) {
         order.lines.forEach { line ->
             jdbc.sql(
                 """
@@ -66,6 +76,7 @@ class JdbcOrderRepository(private val jdbc: JdbcClient) {
             """
             UPDATE orders SET status = :status, paid_at = :paidAt, preparing_at = :preparingAt, ready_at = :readyAt,
                               picked_up_at = :pickedUpAt, cancelled_at = :cancelledAt, cancel_reason = :cancelReason,
+                              store_id = :storeId, promised_pickup_at = :pickupAt,
                               version = version + 1
             WHERE id = :id AND version = :version
             """.trimIndent(),
@@ -77,6 +88,8 @@ class JdbcOrderRepository(private val jdbc: JdbcClient) {
             .param("pickedUpAt", order.pickedUpAt?.let(::ts))
             .param("cancelledAt", order.cancelledAt?.let(::ts))
             .param("cancelReason", order.cancelReason?.name)
+            .param("storeId", order.storeId)
+            .param("pickupAt", ts(order.promisedPickupAt))
             .param("id", order.id)
             .param("version", order.version)
             .update()

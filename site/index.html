@@ -343,6 +343,17 @@ footer a { color: inherit; }
     { id: 'timeout', name: '하나카드', no: '**** 3310', note: '카드사 응답 지연' },
   ];
   const CAMPAIGN = { name: '성수역점 오픈 기념 쿠폰', discount: 1000, min: 5000, limit: 30 };
+  // 같은 브랜드 근처 매장. 메뉴 · 가격은 같고 핸드드립은 팔지 않으며, 에스프레소 머신이 커서 용량이 더 크다.
+  const STORES = {
+    main: { name: '성수역점' },
+    near: { name: '서울숲점', cap: { ESPRESSO: 8, BLENDER: 3, BREW_BAR: 0 }, notSold: new Set([7, 8]), walk: 0.5 },
+  };
+  const TRANSFER_DEADLINE = 120; // 서버 brewslot.order.transfer-accept-timeout 과 같은 2분
+  const NEAR_REPLIES = [
+    { id: 'accept', name: '수락', note: '20초 뒤 수락' },
+    { id: 'refuse', name: '거절', note: '재료 소진 · 15초 뒤 거절' },
+    { id: 'none', name: '응답 없음', note: '2분 기한 초과' },
+  ];
 
   function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
@@ -358,20 +369,24 @@ footer a { color: inherit; }
       issued: 6, coupon: null, useCoupon: true,
       cart: [], pickSel: null, route: 'menu', cat: 'all', viewOrder: null, conflict: null, payCard: 'ok', usePoints: true, payOrder: null, payMsg: null, toast: null,
       storeTab: 'kds',
+      xferOpen: null, xferPick: null, nearReply: 'accept', xferSeq: 0,
     };
   }
 
   const earliest = () => Math.ceil(st.now / SLOT) * SLOT;
   const candidates = () => Array.from({ length: 12 }, (_, i) => earliest() + SLOT * (i + 1));
 
-  function usage() {
-    const m = new Map();
+  const capOf = (store) => (store === 'main' ? st.cap : STORES[store].cap);
+  function usage(store = 'main') {
+    const m = new Map(); const cap = capOf(store);
     for (const o of st.orders) {
-      if (!ACTIVE.has(o.status)) continue;
+      if (o.store !== store || !ACTIVE.has(o.status)) continue;
       for (const tk of o.tickets) { const k = tk.station + '@' + tk.slot; m.set(k, (m.get(k) || 0) + tk.units); }
     }
-    return { stateOf(station, slot) { const r = m.get(station + '@' + slot) || 0; return { capacity: Math.max(st.cap[station], r), reserved: r }; } };
+    return { stateOf(station, slot) { const r = m.get(station + '@' + slot) || 0; return { capacity: Math.max(cap[station], r), reserved: r }; } };
   }
+  /** 이 매장에서 이 장바구니를 팔지 않는 음료 (매장 변경 · 다른 매장 제안 판단. 서버 MenuEquivalence 와 같은 규칙) */
+  const notSoldAt = (store, items) => (store === 'main' ? [] : items.filter((l) => STORES[store].notSold.has(l.menuId)).map((l) => byId[l.menuId].name));
   const demandsOf = (items) => items.map((l) => { const m = byId[l.menuId]; return { station: m.station, load: m.load * l.qty, fresh: m.fresh, line: l }; });
 
   // S.schedule 과 같은 순서 · 같은 규칙으로 각 주문 줄이 어느 슬롯에서 만들어지는지 기록 (제조 티켓용)
@@ -386,10 +401,12 @@ footer a { color: inherit; }
     return out;
   }
 
-  function tryPlace(items, pickup, mine) {
-    if (!st.accepting) return { ok: false, reason: 'CLOSED', alts: [] };
-    if (items.some((l) => st.soldOut.has(l.menuId))) return { ok: false, reason: 'SOLD_OUT', alts: [] };
-    const u = usage(); const ds = demandsOf(items); const e = earliest();
+  /** 제조 계획만 세운다(아무것도 잡지 않음). 성공하면 스테이션 · 슬롯별 제조 티켓 */
+  function plan(store, items, pickup) {
+    if (store === 'main' && !st.accepting) return { ok: false, reason: 'CLOSED', alts: [] };
+    if (store === 'main' && items.some((l) => st.soldOut.has(l.menuId))) return { ok: false, reason: 'SOLD_OUT', alts: [] };
+    if (notSoldAt(store, items).length) return { ok: false, reason: 'NOT_SOLD', alts: [] };
+    const u = usage(store); const ds = demandsOf(items); const e = earliest();
     const r = S.schedule(pickup, ds, u, e);
     if (!r.feasible) return { ok: false, reason: r.reason, alts: S.nearestAlternatives(pickup, candidates(), ds, u, e) };
     const groups = new Map();
@@ -398,18 +415,24 @@ footer a { color: inherit; }
       if (!groups.has(k)) groups.set(k, { station: a.station, slot: a.slot, units: 0, lines: [], done: false, doneAt: null });
       const g = groups.get(k); g.units += a.units; g.lines.push({ menuId: a.line.menuId, qty: a.line.qty });
     }
-    const tickets = [...groups.values()].sort((a, b) => a.slot - b.slot);
+    return { ok: true, tickets: [...groups.values()].sort((a, b) => a.slot - b.slot) };
+  }
+
+  function tryPlace(items, pickup, mine, store = 'main') {
+    const p = plan(store, items, pickup);
+    if (!p.ok) return p;
+    const tickets = p.tickets;
     const total = items.reduce((s, l) => s + byId[l.menuId].price * l.qty, 0);
     const o = {
-      id: 'o' + (++st.seq), no: st.seq, mine, items: items.map((l) => ({ ...l })), pickup, tickets, total,
+      id: 'o' + (++st.seq), no: st.seq, mine, store, items: items.map((l) => ({ ...l })), pickup, tickets, total,
       status: mine ? 'HELD' : 'PAID', createdAt: st.now, holdUntil: mine ? st.now + HOLD_SEC : null,
       paidAt: mine ? null : st.now, readyAt: null, pickedAt: null, pickAt: null,
       pay: mine ? null : { card: total, points: 0, coupon: 0 },
       events: [],
     };
-    if (mine) ev(o, 'OrderPlaced', `주문 접수 · ${hhmm(pickup)} 제조 자리 확보 (${HOLD_SEC / 60}분간 유지)`);
+    if (mine) ev(o, 'OrderPlaced', `${STORES[store].name} 주문 접수 · ${hhmm(pickup)} 제조 자리 확보 (${HOLD_SEC / 60}분간 유지)`);
     st.orders.push(o);
-    if (!mine) addLog(`#${o.no} 주문 접수 · ${hhmm(pickup)} 픽업 · ${itemsText(o.items)}`);
+    if (!mine && store === 'main') addLog(`#${o.no} 주문 접수 · ${hhmm(pickup)} 픽업 · ${itemsText(o.items)}`);
     return { ok: true, order: o };
   }
 
@@ -443,14 +466,24 @@ footer a { color: inherit; }
       if (r.order.total >= CAMPAIGN.min) { r.order.pay.coupon = CAMPAIGN.discount; r.order.pay.card -= CAMPAIGN.discount; }
     }
   }
+  /** 서울숲점에도 손님이 온다 (화면에는 안 보이지만 그 매장의 제조 자리를 차지한다) */
+  function walkInNear() {
+    const m = pickMenu(); if (!m || STORES.near.notSold.has(m.id)) return;
+    const want = earliest() + SLOT * (1 + Math.floor(st.rng() * 5));
+    tryPlace([{ menuId: m.id, qty: 1 }], want, false, 'near');
+  }
   const procTime = (tk) => Math.min(270, 80 + tk.units * 30);
 
   function processAt(t) {
     const prevSlot = Math.floor(st.now / SLOT);
     st.now = t;
     let changed = Math.floor(t / SLOT) !== prevSlot;
-    while (st.genClock + 60 <= t) { st.genClock += 60; const k = poisson(rate(st.genClock)); for (let i = 0; i < k; i++) walkIn(); if (k) changed = true; }
+    while (st.genClock + 60 <= t) {
+      st.genClock += 60; const k = poisson(rate(st.genClock)); for (let i = 0; i < k; i++) walkIn(); if (k) changed = true;
+      const kn = poisson(rate(st.genClock) * STORES.near.walk); for (let i = 0; i < kn; i++) walkInNear();
+    }
     for (const o of st.orders) {
+      if (o.transfer && o.transfer.status === 'AWAITING') { settleTransfer(o, t); changed = true; }
       if (o.status === 'HELD' && t >= o.holdUntil) {
         o.status = 'EXPIRED'; changed = true;
         if (st.payOrder === o.id) st.payMsg = { kind: 'bad', text: `결제 시간(${HOLD_SEC / 60}분)이 지나 잡아둔 제조 자리가 풀렸어요. 다시 주문해 주세요.` };
@@ -464,12 +497,12 @@ footer a { color: inherit; }
         if (o.mine) st.toast = { text: `#${o.no} 결제가 확인됐어요. ${hhmm(o.pickup)}에 맞춰 만들어 드릴게요.`, id: o.id };
       }
       if (o.status === 'PAID') {
-        for (const tk of o.tickets) if (!tk.done && st.autoStaff && t >= tk.slot + procTime(tk)) { tk.done = true; tk.doneAt = t; changed = true; }
+        for (const tk of o.tickets) if (!tk.done && (st.autoStaff || o.store !== 'main') && t >= tk.slot + procTime(tk)) { tk.done = true; tk.doneAt = t; changed = true; }
         if (o.tickets.every((tk) => tk.done)) {
           o.status = 'READY'; o.readyAt = Math.max(...o.tickets.map((tk) => tk.doneAt)); changed = true;
           if (o.mine) { st.toast = { text: `#${o.no} 음료가 준비됐어요! 픽업대에서 받아가세요.`, id: o.id }; ev(o, 'OrderReady', o.readyAt <= o.pickup ? `준비 완료 · 약속보다 ${Math.round((o.pickup - o.readyAt) / 60)}분 먼저` : '준비 완료 · 약속 시각 지남'); }
           else o.pickAt = Math.max(o.readyAt, o.pickup - 120) + Math.floor(st.rng() * 300);
-          addLog(`#${o.no} 준비 완료${o.readyAt > o.pickup ? ' (약속 시각 지남)' : ''}`);
+          if (o.store === 'main') addLog(`#${o.no} 준비 완료${o.readyAt > o.pickup ? ' (약속 시각 지남)' : ''}`);
         }
       }
       if (o.status === 'READY' && !o.mine && t >= o.pickAt) { o.status = 'PICKED_UP'; o.pickedAt = t; changed = true; }
@@ -487,10 +520,15 @@ footer a { color: inherit; }
     else if (d > 0) st.cart.push({ menuId: id, qty: 1 });
     st.conflict = null;
   }
-  function placeMine() {
+  function placeMine(store = 'main') {
     if (!st.pickSel) return;
-    const r = tryPlace(st.cart, st.pickSel, true);
-    if (!r.ok) { st.conflict = { pickup: st.pickSel, reason: r.reason, alts: r.alts }; st.pickSel = null; return; }
+    const r = tryPlace(st.cart, st.pickSel, true, store);
+    if (!r.ok) {
+      // 원하는 시각이 꽉 찼으면 같은 브랜드 근처 매장이 "그 시각 그대로" 되는지도 함께 본다 (서버 409 nearbyStores)
+      const nearOk = store === 'main' && plan('near', st.cart, st.pickSel).ok;
+      st.conflict = { pickup: st.pickSel, reason: r.reason, alts: r.alts, near: nearOk ? st.pickSel : null };
+      st.pickSel = null; return;
+    }
     st.conflict = null; st.payOrder = r.order.id; st.payMsg = null; st.route = 'pay';
   }
   /** 결제 화면에서 적용될 금액: 쿠폰 → 포인트 → 나머지 카드 (서버 Order.cardAmount 와 같은 순서) */
@@ -553,6 +591,7 @@ footer a { color: inherit; }
   function cancelMine(o) {
     if (!o || o.status !== 'PAID' || st.now >= firstSlot(o)) return;
     o.status = 'CANCELLED';
+    if (o.transfer && o.transfer.status === 'AWAITING') { o.transfer.status = 'ABORTED'; o.transfer.hold.status = 'RELEASED'; }
     if (st.toast && st.toast.id === o.id) st.toast = null;
     restoreBenefits(o, '주문 취소 환불');
     ev(o, 'OrderCancelled', `고객 취소 · 카드 ${won(o.pay.card)} 승인 취소${o.pay.coupon || o.pay.points ? ' · 쿠폰·포인트 복원' : ''}`);
@@ -566,6 +605,61 @@ footer a { color: inherit; }
     if (earn) { st.points += earn; st.pointLog.unshift({ t: st.now, amt: earn, memo: `#${o.no} 적립 (카드 결제액 5%)` }); ev(o, 'PointsEarned', `포인트 ${earn}P 적립 (카드 결제액 기준)`); }
     if (st.toast && st.toast.id === o.id) st.toast = null;
     addLog(`#${o.no} 픽업 완료`);
+  }
+
+  // ───────────────────────── 매장 변경 (서버 StoreTransferService 와 같은 순서) ─────────────────────────
+  // 1) 새 매장 자리를 먼저 잡는다(원래 주문 · 결제 · 쿠폰 · 포인트는 그대로)  2) 새 매장이 수락하는 순간 옮긴다
+  // 3) 거절 · 2분 무응답 · 원래 매장이 먼저 제조 시작 → 새 자리만 풀고 원래 주문 유지
+  const transferable = (o) => o && o.mine && o.status === 'PAID' && st.now < firstSlot(o) && o.store === 'main' && !o.movedFrom
+    && !(o.transfer && o.transfer.status === 'AWAITING');
+  function requestTransfer(o, pickup) {
+    if (!transferable(o)) return;
+    const p = plan('near', o.items, pickup);
+    if (!p.ok) { st.toast = { text: `서울숲점도 ${hhmm(pickup)}은 방금 마감됐어요. 다른 시각을 골라 주세요.`, id: o.id }; return; }
+    const hold = { id: 'h' + (++st.xferSeq), hidden: true, store: 'near', status: 'HELD', tickets: p.tickets, items: o.items, holdUntil: st.now + TRANSFER_DEADLINE + 1, events: [] };
+    st.orders.push(hold);
+    const reply = st.nearReply;
+    o.transfer = {
+      id: 'T' + st.xferSeq, hold, pickup, status: 'AWAITING', reply, retries: 0, requestedAt: st.now,
+      deadline: st.now + TRANSFER_DEADLINE, replyAt: st.now + (reply === 'accept' ? 20 : reply === 'refuse' ? 15 : Infinity),
+    };
+    ev(o, 'TransferRequested', `매장 변경 요청 · 서울숲점 ${hhmm(pickup)} 제조 자리 먼저 확보 (성수역점 주문은 그대로 유지)`);
+    addLog(`#${o.no} 고객이 서울숲점으로 매장 변경 요청 — 수락 전까지 이 매장 주문 유지`);
+    st.xferOpen = null; st.xferPick = null;
+  }
+  /** 응답을 못 받은 고객이 다시 눌러도 같은 요청으로 응답 (서버 Idempotency-Key 와 같은 동작) */
+  function retryTransfer(o) {
+    if (!o.transfer || o.transfer.status !== 'AWAITING') return;
+    o.transfer.retries++;
+    ev(o, 'TransferRequested', '매장 변경 재요청 → 진행 중인 같은 요청으로 응답 (새 요청 없음)');
+    st.toast = { text: '이미 서울숲점에 요청했어요. 두 번 옮겨지지 않아요.', id: o.id };
+  }
+  function failTransfer(o, status, code, text, toast) {
+    const x = o.transfer; x.status = status; x.hold.status = 'RELEASED';
+    ev(o, code, text);
+    st.toast = { text: toast, id: o.id };
+    addLog(`#${o.no} 서울숲점 매장 변경 ${status === 'REFUSED' ? '거절' : status === 'EXPIRED' ? '기한 초과' : '중단'} → 이 매장 주문 그대로`);
+  }
+  function settleTransfer(o, t) {
+    const x = o.transfer;
+    if (o.status !== 'PAID' || t >= firstSlot(o)) {
+      failTransfer(o, 'ABORTED', 'OrderTransferFailed', '성수역점이 먼저 만들기 시작 → 매장 변경 중단, 서울숲점 자리 해제',
+        `#${o.no} 성수역점에서 이미 만들기 시작했어요. 성수역점에서 ${hhmm(o.pickup)}에 받아가세요.`);
+    } else if (t >= x.replyAt && x.reply === 'accept') {
+      const prev = o.pickup;
+      o.movedFrom = 'main'; o.store = 'near'; o.pickup = x.pickup; o.tickets = x.hold.tickets; x.hold.status = 'MOVED'; x.status = 'COMPLETED';
+      st.now = x.replyAt;
+      ev(o, 'OrderTransferred', `서울숲점 수락 → 한 번에 옮김 · 성수역점 자리 해제 · 픽업 ${hhmm(prev)} → ${hhmm(o.pickup)} (결제 · 쿠폰 · 포인트 그대로)`);
+      st.now = t;
+      st.toast = { text: `#${o.no} 서울숲점으로 옮겨졌어요. ${hhmm(o.pickup)}에 서울숲점에서 받아가세요.`, id: o.id };
+      addLog(`#${o.no} 서울숲점으로 매장 변경 완료 → 이 매장 제조 자리 반환, 매출은 서울숲점 정산으로`);
+    } else if (t >= x.replyAt && x.reply === 'refuse') {
+      failTransfer(o, 'REFUSED', 'OrderTransferFailed', '서울숲점 거절 (재료 소진) → 서울숲점 자리 해제, 성수역점 주문 유지',
+        `#${o.no} 서울숲점이 주문을 받지 못했어요. 성수역점 주문은 그대로예요.`);
+    } else if (t >= x.deadline) {
+      failTransfer(o, 'EXPIRED', 'OrderTransferFailed', '서울숲점 2분 동안 응답 없음 → 요청 만료, 성수역점 주문 유지',
+        `#${o.no} 서울숲점 응답이 없어 변경을 취소했어요. 성수역점 주문은 그대로예요.`);
+    }
   }
 
   // ───────────────────────── 고객 앱 화면 ─────────────────────────
@@ -584,6 +678,35 @@ footer a { color: inherit; }
   const until = (t) => `<span class="num" data-until="${t}"></span>`;
   const fmtLeft = (sec) => (sec <= 0 ? '0:00' : Math.floor(sec / 60) + ':' + pad(Math.floor(sec % 60)));
   function slotLevel(pickup, u) { const p = S.loadPercentBefore(pickup, u); return p < 50 ? ['lv-ok', '여유'] : p < 85 ? ['lv-mid', '보통'] : ['lv-busy', '혼잡']; }
+
+  /** 주문 상세의 매장 변경 영역: 후보 선택 → 수락 대기 → 결과 */
+  function transferHtml(o) {
+    const x = o.transfer;
+    if (x && x.status === 'AWAITING') {
+      return `<div class="banner warn" role="status" style="margin-top:12px"><span class="spin"></span> <b>서울숲점 수락을 기다리고 있어요</b> · <span class="num" data-until="${x.deadline}"></span> 안에 답이 없으면 자동 취소
+        <div style="font-size:12px;margin-top:6px">서울숲점 ${hhmm(x.pickup)} 자리는 먼저 잡아뒀고, 그동안 성수역점 주문도 그대로 유지돼요. 성수역점이 먼저 만들기 시작하면 변경은 취소돼요.</div>
+        <button class="secondary" data-act="xferRetry" data-id="${o.id}" style="margin-top:8px">요청이 안 된 것 같아요 · 다시 요청</button>${x.retries ? `<div style="font-size:12px;margin-top:6px">같은 요청으로 확인했어요 (재요청 ${x.retries}회). 두 번 옮겨지지 않아요.</div>` : ''}</div>`;
+    }
+    if (x && x.status === 'COMPLETED') return `<div class="banner good" style="margin-top:12px;background:var(--good-soft);color:var(--good)">📍 성수역점 → <b>서울숲점</b>으로 옮겼어요. 결제 · 쿠폰 · 포인트는 그대로예요.</div>`;
+    if (x && x.status !== 'COMPLETED' && st.xferOpen !== o.id) {
+      const why = { REFUSED: '서울숲점이 주문을 받지 못했어요', EXPIRED: '서울숲점 응답이 없었어요', ABORTED: '성수역점이 먼저 만들기 시작했어요' }[x.status];
+      return `<div class="banner" style="margin-top:12px">매장 변경 안 됨 · ${why}. <b>성수역점 주문은 그대로</b>예요.</div>`;
+    }
+    if (st.xferOpen !== o.id || !transferable(o)) return '';
+    const miss = notSoldAt('near', o.items);
+    let h = `<div class="section-h">픽업 매장 바꾸기 <small>같은 브랜드 · 같은 가격 메뉴만</small></div>`;
+    if (miss.length) return h + `<div class="banner warn">서울숲점에는 ${miss.join(' · ')} 메뉴가 없어 옮길 수 없어요.</div><button class="secondary" data-act="xferClose">닫기</button>`;
+    const u = usage('near'); const ds = demandsOf(o.items); const e = earliest();
+    const same = S.schedule(o.pickup, ds, u, e).feasible;
+    const times = (same ? [o.pickup] : []).concat(S.nearestAlternatives(o.pickup, candidates(), ds, u, e)).slice(0, 4);
+    if (!st.xferPick || !times.includes(st.xferPick)) st.xferPick = times[0] || null;
+    h += `<div class="kv"><span><b>서울숲점</b> <span class="m">도보 7분</span></span><span class="pill ${same ? 'good' : 'warn'}">${same ? `${hhmm(o.pickup)} 그대로 가능` : '다른 시각만 가능'}</span></div>`;
+    h += times.length ? `<div class="slots" style="margin-top:8px">${times.map((t) => `<button class="slot num" data-xpick="${t}" aria-pressed="${st.xferPick === t}"><b>${hhmm(t)}</b><span>${t === o.pickup ? '지금 약속' : t < o.pickup ? '더 일찍' : '조금 늦게'}</span></button>`).join('')}</div>`
+      : `<div class="banner warn">서울숲점도 한 시간 안에 가능한 시간이 없어요.</div>`;
+    h += `<div class="section-h" style="margin-top:12px">데모 설정 · 서울숲점 응답</div><div class="chips">${NEAR_REPLIES.map((r) => `<button class="chip" data-reply="${r.id}" aria-pressed="${st.nearReply === r.id}" title="${r.note}">${r.name}</button>`).join('')}</div>`;
+    h += `<div style="display:flex;gap:8px;margin-top:10px"><button class="secondary" data-act="xferClose" style="flex:1">닫기</button><button class="primary" data-act="xferGo" data-id="${o.id}" style="flex:2" ${st.xferPick ? '' : 'disabled'}><span>${st.xferPick ? `서울숲점 ${hhmm(st.xferPick)} 요청` : '시각 선택'}</span><span>›</span></button></div>`;
+    return h;
+  }
 
   function renderPhone() {
     const r = st.route;
@@ -617,7 +740,7 @@ footer a { color: inherit; }
           const why = c.reason === 'EXCEEDS_SLOT_CAPACITY' ? '한 번에 만들 수 있는 양보다 많아요. 수량을 나눠서 주문해 주세요.'
             : c.reason === 'CLOSED' ? '지금은 주문을 받지 않아요.' : c.reason === 'SOLD_OUT' ? '품절된 메뉴가 있어요.'
             : `그 사이 주문이 몰려 ${hhmm(c.pickup)} 픽업은 마감됐어요.${c.alts.length ? ' 이 시간은 가능해요:' : ''}`;
-          b += `<div class="banner bad" role="alert" style="margin-top:12px">${why}${c.alts.length ? `<div style="margin-top:8px" class="chips">${c.alts.map((t) => `<button class="chip" data-alt="${t}">${hhmm(t)}로 주문</button>`).join('')}</div>` : ''}</div>`;
+          b += `<div class="banner bad" role="alert" style="margin-top:12px">${why}${c.alts.length ? `<div style="margin-top:8px" class="chips">${c.alts.map((t) => `<button class="chip" data-alt="${t}">${hhmm(t)}로 주문</button>`).join('')}</div>` : ''}${c.near ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed currentColor">같은 브랜드 <b>서울숲점</b>은 ${hhmm(c.near)} 그대로 가능해요 (도보 7분).<div style="margin-top:8px" class="chips"><button class="chip" data-near="${c.near}">서울숲점에서 ${hhmm(c.near)}에 받기</button></div></div>` : ''}</div>`;
         }
         if (blocked) b += `<div class="banner warn" style="margin-top:12px">${st.accepting ? '품절된 메뉴를 빼 주세요.' : '매장 사정으로 잠시 주문 접수를 멈췄어요.'}</div>`;
         b += `<div class="section-h">언제 받으시겠어요? <small>고른 시각에 맞춰 만들기 시작해요</small></div>`;
@@ -651,9 +774,9 @@ footer a { color: inherit; }
       const stg = orderStage(o); const fs = firstSlot(o);
       const msg = {
         PAYING: ['결제 결과를 확인하고 있어요', '카드사 응답이 늦어요. 자동으로 다시 확인하니 기다려 주세요'],
-        WAIT: [`${hhmm(o.pickup)}에 받으실 수 있어요`, `음료가 식지 않도록 ${hhmm(fs)}부터 만들어요 · ${until(fs)} 남음`],
+        WAIT: [`${STORES[o.store].name}에서 ${hhmm(o.pickup)}에 받으실 수 있어요`, `음료가 식지 않도록 ${hhmm(fs)}부터 만들어요 · ${until(fs)} 남음`],
         MAKING: ['만들고 있어요', `${hhmm(o.pickup)}까지 준비해 드릴게요`],
-        READY: ['준비됐어요! 픽업대에서 받아가세요', o.readyAt <= o.pickup ? `약속한 ${hhmm(o.pickup)}보다 먼저 준비됐어요` : '약속 시각보다 늦어져 죄송해요'],
+        READY: [`준비됐어요! ${STORES[o.store].name} 픽업대에서 받아가세요`, o.readyAt <= o.pickup ? `약속한 ${hhmm(o.pickup)}보다 먼저 준비됐어요` : '약속 시각보다 늦어져 죄송해요'],
         PICKED_UP: ['맛있게 드세요', `${hhmm(o.pickedAt)} 픽업`],
         CANCELLED: ['주문이 취소됐어요', '카드 승인 취소와 포인트 환불이 끝났어요'],
       }[stg];
@@ -671,6 +794,7 @@ footer a { color: inherit; }
         const cur = steps.findIndex((s) => !s[2]);
         b += `<ol class="track">${steps.map((s, i) => `<li class="${s[2] ? 'done' : i === cur ? 'now' : ''}"><span class="b">${s[2] ? '✓' : ''}</span><div><div class="tt">${s[0]}</div><div class="ts num">${s[1]}</div></div></li>`).join('')}</ol>`;
       }
+      b += transferHtml(o);
       b += `<div class="section-h">주문 내역</div>${o.items.map((l) => `<div class="kv"><span>${byId[l.menuId].name} × ${l.qty}</span><span class="num">${won(byId[l.menuId].price * l.qty)}</span></div>`).join('')}`;
       b += `${o.pay.coupon ? `<div class="kv"><span class="m">쿠폰 할인</span><span class="num">−${won(o.pay.coupon)}</span></div>` : ''}<div class="kv"><span class="m">포인트 사용</span><span class="num">−${won(o.pay.points)}</span></div><div class="kv total"><span>카드 결제</span><span class="num">${won(o.pay.card)}</span></div>`;
       const evs = o.events.slice();
@@ -678,12 +802,12 @@ footer a { color: inherit; }
       evs.sort((x, y) => x.t - y.t);
       b += `<details style="margin-top:14px"><summary class="section-h" style="cursor:pointer;margin:0">주문 기록 <small>${evs.length}건</small></summary><ul class="evts" style="margin-top:8px">${evs.map((e) => `<li><span class="t num">${hhmmss(e.t)}</span>${e.text}<code>${e.code}</code></li>`).join('')}</ul></details>`;
       if (stg === 'READY') b += `<div class="cartbar"><button class="primary" data-act="pickup" data-id="${o.id}"><span>음료를 받았어요</span><span>✓</span></button></div>`;
-      else if (stg === 'WAIT') b += `<button class="secondary" data-act="cancel" data-id="${o.id}" style="margin-top:16px">주문 취소 · 만들기 시작 전까지 가능</button>`;
+      else if (stg === 'WAIT') b += `${transferable(o) && st.xferOpen !== o.id ? `<button class="secondary" data-act="xferOpen" data-id="${o.id}" style="margin-top:16px">📍 픽업 매장 바꾸기 · 결제는 그대로</button>` : ''}<button class="secondary" data-act="cancel" data-id="${o.id}" style="margin-top:8px">주문 취소 · 만들기 시작 전까지 가능</button>`;
       else if (stg === 'PICKED_UP' || stg === 'CANCELLED') b += `<button class="secondary" data-act="reorder" data-id="${o.id}" style="margin-top:16px">같은 메뉴 다시 주문하기</button>`;
     } else if (r === 'orders') {
       h = `<h2>주문내역</h2>${ptsPill}`;
       const mine = st.orders.filter((o) => o.mine && !['HELD', 'EXPIRED', 'FAILED'].includes(o.status)).reverse();
-      b = mine.length ? mine.map((o) => { const [c, t] = orderStage(o) === 'MAKING' ? ['warn', '만드는 중'] : STATUS_PILL[o.status]; return `<button class="order-card" data-open="${o.id}"><div class="row"><b class="num">#${o.no} · ${hhmm(o.pickup)} 픽업</b><span class="pill ${c}">${t}</span></div><div style="color:var(--ink2);font-size:13px;margin-top:4px">${itemsText(o.items)}</div><div class="num" style="color:var(--muted);font-size:12px">${won(o.total)}</div></button>`; }).join('')
+      b = mine.length ? mine.map((o) => { const [c, t] = orderStage(o) === 'MAKING' ? ['warn', '만드는 중'] : STATUS_PILL[o.status]; return `<button class="order-card" data-open="${o.id}"><div class="row"><b class="num">#${o.no} · ${STORES[o.store].name} ${hhmm(o.pickup)} 픽업</b><span class="pill ${c}">${t}</span></div><div style="color:var(--ink2);font-size:13px;margin-top:4px">${itemsText(o.items)}</div><div class="num" style="color:var(--muted);font-size:12px">${won(o.total)}</div></button>`; }).join('')
         : `<div class="empty">아직 주문이 없어요.<br><br><button class="secondary" data-go="menu" style="width:auto">메뉴 보러 가기</button></div>`;
     } else if (r === 'me') {
       h = `<div><h2>내 정보</h2><div class="sub">김브루 님</div></div>`;
@@ -718,6 +842,13 @@ footer a { color: inherit; }
     else if (d.go) st.route = d.go;
     else if (d.pick) st.pickSel = Number(d.pick);
     else if (d.alt) { st.pickSel = Number(d.alt); st.conflict = null; placeMine(); }
+    else if (d.near) { st.pickSel = Number(d.near); st.conflict = null; placeMine('near'); }
+    else if (d.xpick) st.xferPick = Number(d.xpick);
+    else if (d.reply) st.nearReply = d.reply;
+    else if (d.act === 'xferOpen') { st.xferOpen = d.id; st.xferPick = null; }
+    else if (d.act === 'xferClose') st.xferOpen = null;
+    else if (d.act === 'xferGo') requestTransfer(st.orders.find((o) => o.id === d.id), st.xferPick);
+    else if (d.act === 'xferRetry') retryTransfer(st.orders.find((o) => o.id === d.id));
     else if (d.card) st.payCard = d.card;
     else if (d.open) { st.viewOrder = d.open; st.route = 'order'; if (st.toast && st.toast.id === d.open) st.toast = null; }
     else if (d.act === 'place') placeMine();
@@ -737,10 +868,11 @@ footer a { color: inherit; }
 
   // ───────────────────────── 매장 화면 ─────────────────────────
   function renderKpis() {
-    const paid = st.orders.filter((o) => ['PAID', 'READY', 'PICKED_UP'].includes(o.status));
-    const queue = st.orders.filter((o) => o.status === 'PAID').reduce((s, o) => s + o.tickets.filter((t) => !t.done && t.slot <= st.now).length, 0);
-    const ready = st.orders.filter((o) => o.status === 'READY').length;
-    const doneOrders = st.orders.filter((o) => o.readyAt);
+    const here = st.orders.filter((o) => o.store === 'main');
+    const paid = here.filter((o) => ['PAID', 'READY', 'PICKED_UP'].includes(o.status));
+    const queue = here.filter((o) => o.status === 'PAID').reduce((s, o) => s + o.tickets.filter((t) => !t.done && t.slot <= st.now).length, 0);
+    const ready = here.filter((o) => o.status === 'READY').length;
+    const doneOrders = here.filter((o) => o.readyAt);
     const onTime = doneOrders.filter((o) => o.readyAt <= o.pickup).length;
     const rateTxt = doneOrders.length ? Math.round((onTime * 100) / doneOrders.length) + '<small>%</small>' : '—';
     $('kpis').innerHTML = [
@@ -765,14 +897,14 @@ footer a { color: inherit; }
       const horizon = st.now + SLOT * 2;
       for (const s of S.STATIONS) {
         const items = [];
-        for (const o of st.orders) if (o.status === 'PAID') for (const tk of o.tickets) if (tk.station === s && !tk.done && tk.slot < horizon) items.push([o, tk]);
+        for (const o of st.orders) if (o.store === 'main' && o.status === 'PAID') for (const tk of o.tickets) if (tk.station === s && !tk.done && tk.slot < horizon) items.push([o, tk]);
         items.sort((a, b) => a[1].slot - b[1].slot || a[0].pickup - b[0].pickup);
         const nowItems = items.filter(([, tk]) => tk.slot <= st.now); const next = items.filter(([, tk]) => tk.slot > st.now);
         h += `<div class="lane"><h3><i style="background:${STATION[s].color}"></i>${STATION[s].name}<span class="c num">${nowItems.length}</span></h3>
           <div class="grp">지금 만들기</div>${nowItems.map(([o, tk]) => ticketHtml(o, tk)).join('') || '<div class="none">없음</div>'}
           <div class="grp">다음 순서</div>${next.map(([o, tk]) => ticketHtml(o, tk)).join('') || '<div class="none">없음</div>'}</div>`;
       }
-      const ready = st.orders.filter((o) => o.status === 'READY').sort((a, b) => a.pickup - b.pickup);
+      const ready = st.orders.filter((o) => o.store === 'main' && o.status === 'READY').sort((a, b) => a.pickup - b.pickup);
       h += `<div class="lane"><h3><i style="background:var(--good)"></i>픽업대<span class="c num">${ready.length}</span></h3>${ready.map((o) => `<div class="tk${o.mine ? ' mine' : ''}"><div class="h"><span class="no num">#${o.no}</span><span class="pk num">${hhmm(o.pickup)} 픽업${o.mine ? ' · 내 주문' : ''}</span></div><ul><li>${itemsText(o.items)}</li></ul><div class="act"><small class="num">${hhmm(o.readyAt)} 준비${o.readyAt > o.pickup ? ' · 지연' : ''}</small><button class="handoff" data-hand="${o.id}">전달</button></div></div>`).join('') || '<div class="none">없음</div>'}</div>`;
       h += `</div>`;
       h += `<div class="log" aria-label="매장 알림">${st.log.slice(0, 40).map((l) => `<div><b>${hhmm(l.t)}</b>${l.msg}</div>`).join('')}</div>`;
@@ -789,22 +921,23 @@ footer a { color: inherit; }
     } else if (st.storeTab === 'menu') {
       h += `<div class="tbl-wrap"><table><thead><tr><th>메뉴</th><th>제조 스테이션</th><th class="r">가격</th><th class="r">제조 부하</th><th class="r">맛있는 시간</th><th class="r">오늘 판매</th><th>판매 상태</th></tr></thead><tbody>`;
       for (const m of MENU) {
-        const sold = st.orders.filter((o) => ['PAID', 'READY', 'PICKED_UP'].includes(o.status)).reduce((s, o) => s + o.items.filter((l) => l.menuId === m.id).reduce((a, l) => a + l.qty, 0), 0);
+        const sold = st.orders.filter((o) => o.store === 'main' && ['PAID', 'READY', 'PICKED_UP'].includes(o.status)).reduce((s, o) => s + o.items.filter((l) => l.menuId === m.id).reduce((a, l) => a + l.qty, 0), 0);
         const on = !st.soldOut.has(m.id);
         h += `<tr><td>${m.icon} <b>${m.name}</b></td><td><span class="st-dot" style="background:${STATION[m.station].color}"></span>${STATION[m.station].name}</td><td class="r num">${won(m.price)}</td><td class="r num">${m.load}</td><td class="r num">${m.fresh}분</td><td class="r num">${sold}잔</td>
           <td><button class="toggle" style="width:auto;padding:4px 10px" data-sold="${m.id}" role="switch" aria-checked="${on}"><span>${on ? '판매 중' : '품절'}</span><span class="sw"></span></button></td></tr>`;
       }
       h += `</tbody></table></div><p class="hint" style="margin-top:10px">맛있는 시간 = 완성 후 픽업까지 허용하는 시간. 따뜻한 음료는 픽업 직전 5분 안에, 아이스 · 스무디 · 드립은 10분 안에 만들어요.</p>`;
     } else if (st.storeTab === 'sales') {
-      const list = st.orders.filter((o) => o.pay && !['FAILED', 'PAYING'].includes(o.status));
-      const valid = list.filter((o) => o.status !== 'CANCELLED');
+      const list = st.orders.filter((o) => (o.store === 'main' || o.movedFrom === 'main') && o.pay && !['FAILED', 'PAYING'].includes(o.status));
+      const valid = list.filter((o) => o.status !== 'CANCELLED' && o.store === 'main');
+      const moved = list.filter((o) => o.movedFrom === 'main');
       const fee = (o) => Math.round(o.pay.card * 0.022);
       const gross = valid.reduce((s, o) => s + o.total, 0), card = valid.reduce((s, o) => s + o.pay.card, 0), pts = valid.reduce((s, o) => s + o.pay.points, 0), cps = valid.reduce((s, o) => s + (o.pay.coupon || 0), 0), fees = valid.reduce((s, o) => s + fee(o), 0);
       const refunds = list.filter((o) => o.status === 'CANCELLED').reduce((s, o) => s + o.total, 0);
       h += `<div class="sum-grid"><div class="sum"><div class="l">매출 · ${valid.length}건</div><div class="v num">${won(gross)}</div></div><div class="sum"><div class="l">카드 / 포인트 / 쿠폰</div><div class="v num" style="font-size:14px">${won(card)} / ${won(pts)} / ${won(cps)}</div></div><div class="sum"><div class="l">카드 수수료 2.2% (건별)</div><div class="v num">−${won(fees)}</div></div><div class="sum hl"><div class="l">정산 예정액 · 다음 영업일</div><div class="v num">${won(gross - fees)}</div></div></div>`;
-      h += `<p class="hint" style="margin:-6px 0 12px">포인트·쿠폰 할인분은 브랜드가 부담해 정가 기준으로 정산돼요. ${CAMPAIGN.name}: ${st.issued}/${CAMPAIGN.limit}장 발급, ${valid.filter((o) => o.pay.coupon).length}장 사용.${refunds ? ` 취소 ${won(refunds)}은 매출에서 빠졌어요.` : ''}</p>`;
+      h += `<p class="hint" style="margin:-6px 0 12px">포인트·쿠폰 할인분은 브랜드가 부담해 정가 기준으로 정산돼요. ${CAMPAIGN.name}: ${st.issued}/${CAMPAIGN.limit}장 발급, ${valid.filter((o) => o.pay.coupon).length}장 사용.${refunds ? ` 취소 ${won(refunds)}은 매출에서 빠졌어요.` : ''}${moved.length ? ` 서울숲점으로 옮긴 ${moved.length}건 ${won(moved.reduce((a, o) => a + o.total, 0))}은 카드 수수료와 함께 서울숲점 정산으로 넘어갔어요.` : ''}</p>`;
       h += `<div class="tbl-wrap" style="max-height:420px"><table><thead><tr><th>주문</th><th>결제</th><th>픽업</th><th>메뉴</th><th class="r">금액</th><th class="r">카드</th><th class="r">포인트</th><th class="r">쿠폰</th><th class="r">수수료</th><th>상태</th></tr></thead><tbody>`;
-      h += list.slice().reverse().map((o) => { const [c, t] = STATUS_PILL[o.status]; const x = o.status === 'CANCELLED'; return `<tr${x ? ' style="color:var(--muted)"' : ''}><td class="num"><b>#${o.no}</b>${o.mine ? ' <span class="pill acc">내 주문</span>' : ''}</td><td class="num">${hhmm(o.paidAt)}</td><td class="num">${hhmm(o.pickup)}</td><td>${itemsText(o.items)}</td><td class="r num">${won(o.total)}</td><td class="r num">${won(o.pay.card)}</td><td class="r num">${won(o.pay.points)}</td><td class="r num">${won(o.pay.coupon || 0)}</td><td class="r num">${x ? '0원' : won(fee(o))}</td><td><span class="pill ${c}">${t}</span></td></tr>`; }).join('');
+      h += list.slice().reverse().map((o) => { const [c, t] = o.movedFrom ? ['', '→ 서울숲점'] : STATUS_PILL[o.status]; const x = o.status === 'CANCELLED' || !!o.movedFrom; return `<tr${x ? ' style="color:var(--muted)"' : ''}><td class="num"><b>#${o.no}</b>${o.mine ? ' <span class="pill acc">내 주문</span>' : ''}</td><td class="num">${hhmm(o.paidAt)}</td><td class="num">${hhmm(o.pickup)}</td><td>${itemsText(o.items)}</td><td class="r num">${won(o.total)}</td><td class="r num">${won(o.pay.card)}</td><td class="r num">${won(o.pay.points)}</td><td class="r num">${won(o.pay.coupon || 0)}</td><td class="r num">${x ? '0원' : won(fee(o))}</td><td><span class="pill ${c}">${t}</span></td></tr>`; }).join('');
       h += `</tbody></table></div>`;
     }
     const body = $('conBody');

@@ -24,6 +24,8 @@ data class RedeemPoints(
 data class ReverseRedemption(
     val orderId: String,
     val reason: String,
+    /** 추가 필드(하위 호환): 사용 취소를 부담하는 현재 매장. null 이면 사용 때 매장. */
+    val storeId: Long? = null,
 )
 
 // loyalty.events (발행: loyalty-service)

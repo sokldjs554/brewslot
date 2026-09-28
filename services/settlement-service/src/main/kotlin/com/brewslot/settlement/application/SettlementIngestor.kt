@@ -4,6 +4,7 @@ import com.brewslot.common.BusinessTime
 import com.brewslot.messaging.EnvelopeCodec
 import com.brewslot.messaging.EventEnvelope
 import com.brewslot.messaging.Topics
+import com.brewslot.messaging.contract.OrderTransferred
 import com.brewslot.messaging.contract.PaymentCaptured
 import com.brewslot.messaging.contract.PaymentRefunded
 import com.brewslot.messaging.contract.PointsRedeemed
@@ -30,6 +31,10 @@ class SettlementIngestor(
     @KafkaListener(topics = [Topics.PAYMENT_EVENTS, Topics.LOYALTY_EVENTS], groupId = "settlement-service")
     fun on(message: String) = ingest(codec.decode(message))
 
+    /** 주문 이벤트 중 돈의 귀속이 바뀌는 사실(매장 변경)만 받는다. */
+    @KafkaListener(topics = [Topics.ORDER_EVENTS], groupId = "settlement-service-orders")
+    fun onOrderEvent(message: String) = ingest(codec.decode(message))
+
     fun ingest(envelope: EventEnvelope) {
         when (envelope.eventType) {
             PaymentCaptured::class.simpleName -> codec.payloadOf<PaymentCaptured>(envelope).let {
@@ -44,6 +49,14 @@ class SettlementIngestor(
                 if (it.couponAmount > 0) {
                     insert(couponKey(envelope.eventId), it.storeId, it.brandId, it.orderId, EntryKind.COUPON_SALE, it.couponAmount, null, it.redeemedAt)
                 }
+            }
+            // 매출과 그 카드 수수료를 원래 매장에서 새 매장으로 옮긴다. 이후 환불 · 사용 취소는 새 매장 기준으로 들어온다.
+            OrderTransferred::class.simpleName -> codec.payloadOf<OrderTransferred>(envelope).let {
+                val fee = SettlementCalculator.cardFee(it.cardAmount, props.pgFeeBps)
+                val out = derivedKey(envelope.eventId, "out")
+                val inKey = derivedKey(envelope.eventId, "in")
+                insert(out, it.fromStoreId, it.brandId, it.orderId, EntryKind.TRANSFER_OUT, -it.totalAmount, null, it.transferredAt, -fee)
+                insert(inKey, it.toStoreId, it.brandId, it.orderId, EntryKind.TRANSFER_IN, it.totalAmount, null, it.transferredAt, fee)
             }
             PointsRedemptionReversed::class.simpleName -> codec.payloadOf<PointsRedemptionReversed>(envelope).let {
                 if (it.amount > 0) insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.POINT_REVERSAL, -it.amount, null, it.reversedAt)
@@ -63,10 +76,22 @@ class SettlementIngestor(
         }
     }
 
-    private fun couponKey(eventId: UUID): UUID = UUID.nameUUIDFromBytes("$eventId:coupon".toByteArray())
+    private fun couponKey(eventId: UUID): UUID = derivedKey(eventId, "coupon")
 
-    private fun insert(eventId: UUID, storeId: Long, brandId: Long, orderId: String, kind: EntryKind, amount: Long, pgTxId: String?, at: Instant) {
-        val fee = if (kind.isCard) SettlementCalculator.cardFee(amount, props.pgFeeBps) else 0
+    private fun derivedKey(eventId: UUID, part: String): UUID = UUID.nameUUIDFromBytes("$eventId:$part".toByteArray())
+
+    private fun insert(
+        eventId: UUID,
+        storeId: Long,
+        brandId: Long,
+        orderId: String,
+        kind: EntryKind,
+        amount: Long,
+        pgTxId: String?,
+        at: Instant,
+        pgFee: Long? = null,
+    ) {
+        val fee = pgFee ?: if (kind.isCard) SettlementCalculator.cardFee(amount, props.pgFeeBps) else 0
         jdbc.sql(
             """
             INSERT INTO settlement_entry (source_event_id, store_id, brand_id, order_id, kind, amount, pg_fee, pg_transaction_id, occurred_at, business_date)

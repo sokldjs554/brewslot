@@ -94,7 +94,10 @@ class PaymentService(
     /** 보상 명령. 결제가 없거나 실패했으면 할 일이 없고, 결과 미확정이면 "환불 예약" 만 해 둔다. */
     fun refund(envelope: EventEnvelope, cmd: RefundPayment) {
         val orderId = UUID.fromString(cmd.orderId)
-        inbox.process(CONSUMER, envelope) { payments.requestRefund(orderId, clock.instant()) }
+        inbox.process(CONSUMER, envelope) {
+            cmd.storeId?.let { payments.reassignStore(orderId, it, clock.instant()) }
+            payments.requestRefund(orderId, clock.instant())
+        }
         val payment = payments.findByOrderId(orderId) ?: return
         when (payment.status) {
             PaymentStatus.CAPTURED -> cancelAtPg(payment)

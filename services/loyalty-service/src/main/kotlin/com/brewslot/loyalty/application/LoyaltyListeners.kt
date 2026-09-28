@@ -3,6 +3,7 @@ package com.brewslot.loyalty.application
 import com.brewslot.messaging.EnvelopeCodec
 import com.brewslot.messaging.Topics
 import com.brewslot.messaging.contract.OrderPickedUp
+import com.brewslot.messaging.contract.OrderTransferred
 import com.brewslot.messaging.contract.RedeemPoints
 import com.brewslot.messaging.contract.ReverseRedemption
 import com.brewslot.messaging.inbox.Inbox
@@ -38,7 +39,7 @@ class LoyaltyListeners(
                 }
             }
             ReverseRedemption::class.simpleName -> codec.payloadOf<ReverseRedemption>(envelope).let { c ->
-                inbox.process(CONSUMER_COMMANDS, envelope) { points.reverseRedemption(UUID.fromString(c.orderId), c.reason) }
+                inbox.process(CONSUMER_COMMANDS, envelope) { points.reverseRedemption(UUID.fromString(c.orderId), c.reason, c.storeId) }
             }
         }
     }
@@ -47,9 +48,24 @@ class LoyaltyListeners(
     @KafkaListener(topics = [Topics.ORDER_EVENTS], groupId = "loyalty-earn")
     fun onOrderEvent(message: String) {
         val envelope = codec.decode(message)
-        if (envelope.eventType != OrderPickedUp::class.simpleName) return
-        val e = codec.payloadOf<OrderPickedUp>(envelope)
-        inbox.process(CONSUMER_EARN, envelope) { points.earn(UUID.fromString(e.orderId), e.memberId, e.brandId, e.cardAmount) }
+        when (envelope.eventType) {
+            OrderPickedUp::class.simpleName -> codec.payloadOf<OrderPickedUp>(envelope).let { e ->
+                inbox.process(CONSUMER_EARN, envelope) { points.earn(UUID.fromString(e.orderId), e.memberId, e.brandId, e.cardAmount) }
+            }
+            // 매장 변경: 포인트 · 쿠폰 결제분의 매장 채권을 새 매장으로
+            OrderTransferred::class.simpleName -> codec.payloadOf<OrderTransferred>(envelope).let { e ->
+                inbox.process(CONSUMER_EARN, envelope) {
+                    points.transferClearing(
+                        UUID.fromString(e.orderId),
+                        e.memberId,
+                        e.brandId,
+                        e.fromStoreId,
+                        e.toStoreId,
+                        e.pointAmount + e.couponAmount,
+                    )
+                }
+            }
+        }
     }
 
     companion object {

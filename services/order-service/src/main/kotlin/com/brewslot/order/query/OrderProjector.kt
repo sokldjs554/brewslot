@@ -10,6 +10,7 @@ import com.brewslot.messaging.contract.OrderPickedUp
 import com.brewslot.messaging.contract.OrderPlaced
 import com.brewslot.messaging.contract.OrderPreparing
 import com.brewslot.messaging.contract.OrderReady
+import com.brewslot.messaging.contract.OrderTransferred
 import com.brewslot.messaging.inbox.Inbox
 import com.brewslot.order.catalog.application.CatalogService
 import org.springframework.jdbc.core.simple.JdbcClient
@@ -64,6 +65,12 @@ class OrderProjector(
                 status(e.orderId, "PICKED_UP", e.pickedUpAt)
                 stats(e.storeId, e.promisedPickupAt, "picked_up_orders = picked_up_orders + 1")
             }
+            OrderTransferred::class.simpleName -> codec.payloadOf<OrderTransferred>(envelope).let { e ->
+                transferred(e)
+                // 매출 통계를 새 매장으로 옮긴다 (결제일과 변경일이 같다고 보고 변경 시각의 영업일에 반영)
+                stats(e.fromStoreId, e.transferredAt, "paid_orders = paid_orders - 1, gross_amount = gross_amount - ${e.totalAmount}")
+                stats(e.toStoreId, e.transferredAt, "paid_orders = paid_orders + 1, gross_amount = gross_amount + ${e.totalAmount}")
+            }
             OrderCancelled::class.simpleName -> codec.payloadOf<OrderCancelled>(envelope).let { e ->
                 status(e.orderId, "CANCELLED", e.cancelledAt)
                 if (e.wasPaid) {
@@ -93,6 +100,24 @@ class OrderProjector(
             .param("items", codec.mapper.writeValueAsString(e.items))
             .param("signature", cartSignature(e.storeId, e.items.map { it.menuItemId to it.quantity }))
             .param("placedAt", Timestamp.from(e.placedAt))
+            .update()
+    }
+
+    private fun transferred(e: OrderTransferred) {
+        val storeName = runCatching { catalog.store(e.toStoreId).name }.getOrDefault("store-${e.toStoreId}")
+        jdbc.sql(
+            """
+            UPDATE member_order_view SET store_id = :storeId, store_name = :storeName, promised_pickup_at = :pickupAt,
+                                         items = CAST(:items AS jsonb), cart_signature = :signature
+            WHERE order_id = CAST(:orderId AS uuid)
+            """.trimIndent(),
+        )
+            .param("storeId", e.toStoreId)
+            .param("storeName", storeName)
+            .param("pickupAt", Timestamp.from(e.promisedPickupAt))
+            .param("items", codec.mapper.writeValueAsString(e.items))
+            .param("signature", cartSignature(e.toStoreId, e.items.map { it.menuItemId to it.quantity }))
+            .param("orderId", e.orderId)
             .update()
     }
 
