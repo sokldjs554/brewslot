@@ -1,0 +1,54 @@
+{
+  "title": "BrewSlot — 픽업 약속 · 결제 · 메시징",
+  "description": "러시아워에 먼저 볼 지표만 모았다. 위에서부터: 고객이 체감하는 것 → 원인 후보(메시징) → 비즈니스(쿠폰·결제 결과).",
+  "layout_type": "ordered",
+  "template_variables": [{ "name": "env", "prefix": "env", "default": "*" }],
+  "widgets": [
+    {
+      "definition": {
+        "type": "group", "title": "고객 체감", "layout_type": "ordered",
+        "widgets": [
+          { "definition": { "type": "timeseries", "title": "결제 시작 → 주문 확정 (p50 / p95, 초)",
+            "requests": [
+              { "q": "max:brewslot.checkout.saga.duration.percentile{$env,phi:0.5,outcome:completed}", "display_type": "line" },
+              { "q": "max:brewslot.checkout.saga.duration.percentile{$env,phi:0.95,outcome:completed}", "display_type": "line" }
+            ],
+            "markers": [{ "value": "y = 3", "display_type": "error dashed" }] } },
+          { "definition": { "type": "timeseries", "title": "픽업 약속 대비 제조 완료 (p90, 초 — 0 이하가 정상)",
+            "requests": [{ "q": "max:brewslot.pickup.promise.lateness.percentile{$env,phi:0.9} by {store}", "display_type": "line" }],
+            "markers": [{ "value": "y = 0", "display_type": "warning dashed" }] } },
+          { "definition": { "type": "query_value", "title": "결제 결과 불명(PG 타임아웃) 10분",
+            "requests": [{ "q": "sum:brewslot.checkout.saga.duration.count{$env,outcome:timed_out}.as_count()", "aggregator": "sum" }] } }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group", "title": "메시징 (원인 후보)", "layout_type": "ordered",
+        "widgets": [
+          { "definition": { "type": "timeseries", "title": "Outbox 미발행 적체",
+            "requests": [{ "q": "max:brewslot.outbox.pending{$env} by {service}", "display_type": "area" }] } },
+          { "definition": { "type": "timeseries", "title": "Outbox 적재 → Kafka ack 지연 (p99)",
+            "requests": [{ "q": "max:brewslot.outbox.lag.percentile{$env,phi:0.99} by {service}", "display_type": "line" }] } },
+          { "definition": { "type": "timeseries", "title": "DLT 격리 (0 이어야 정상)",
+            "requests": [{ "q": "sum:brewslot.kafka.dlt{$env} by {topic}.as_count()", "display_type": "bars" }] } }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group", "title": "스케줄링 · 비즈니스", "layout_type": "ordered",
+        "widgets": [
+          { "definition": { "type": "timeseries", "title": "슬롯 사용량 캐시 (hit / rebuild / fallback)",
+            "requests": [{ "q": "sum:brewslot.slot.cache{$env} by {result}.as_count()", "display_type": "bars" }] } },
+          { "definition": { "type": "timeseries", "title": "슬롯 예약 경합 재시도",
+            "requests": [{ "q": "sum:brewslot.slot.reservation.race_retries{$env}.as_count()", "display_type": "bars" }] } },
+          { "definition": { "type": "timeseries", "title": "결제 결과 (captured / failed / unknown / refunded)",
+            "requests": [{ "q": "sum:brewslot.payment.result{$env} by {result}.as_count()", "display_type": "bars" }] } },
+          { "definition": { "type": "timeseries", "title": "쿠폰 이벤트 발급 (issued / sold_out)",
+            "requests": [{ "q": "sum:brewslot.coupon.claims{$env} by {result}.as_count()", "display_type": "bars" }] } }
+        ]
+      }
+    }
+  ]
+}

@@ -77,10 +77,12 @@ class MessagingAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(CommonErrorHandler::class)
-    fun kafkaErrorHandler(kafka: KafkaTemplate<String, String>): CommonErrorHandler {
+    fun kafkaErrorHandler(kafka: KafkaTemplate<String, String>, meterRegistry: MeterRegistry): CommonErrorHandler {
         val log = LoggerFactory.getLogger("com.brewslot.messaging.DeadLetter")
         val recoverer = DeadLetterPublishingRecoverer(kafka) { record, ex ->
             log.error("message moved to DLT: topic={}, key={}, cause={}", record.topic(), record.key(), ex.toString())
+            // 운영자 개입이 필요한 유일한 신호. Datadog 모니터가 1건이라도 오면 알린다(infra/datadog/monitors.json).
+            meterRegistry.counter("brewslot.kafka.dlt", "topic", record.topic()).increment()
             TopicPartition(record.topic() + Topics.DLT_SUFFIX, -1)
         }
         val backOff = ExponentialBackOff(200, 2.0).apply { maxElapsedTime = 3_000 }

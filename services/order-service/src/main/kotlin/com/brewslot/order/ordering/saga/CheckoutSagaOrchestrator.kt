@@ -17,11 +17,14 @@ import com.brewslot.order.scheduling.application.SlotReservationService
 import com.brewslot.web.BusinessException
 import com.brewslot.web.ConflictException
 import com.brewslot.web.NotFoundException
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
+import java.time.Duration
 import java.util.UUID
 
 /**
@@ -43,6 +46,7 @@ class CheckoutSagaOrchestrator(
     private val outbox: Outbox,
     private val props: OrderProperties,
     private val clock: Clock,
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -96,6 +100,7 @@ class CheckoutSagaOrchestrator(
     fun onPointsRedemptionFailed(orderId: UUID, reason: String = "INSUFFICIENT_BALANCE") = withRunningSaga(orderId, "PointsRedemptionFailed") { order, saga ->
         cancel(order, if (reason.startsWith("COUPON_")) CancelReason.COUPON_REJECTED else CancelReason.POINTS_INSUFFICIENT)
         saga.compensated()
+        recordDuration(saga, "compensated")
     }
 
     @Transactional
@@ -123,6 +128,7 @@ class CheckoutSagaOrchestrator(
             )
         }
         saga.compensated()
+        recordDuration(saga, "compensated")
     }
 
     /*
@@ -144,6 +150,7 @@ class CheckoutSagaOrchestrator(
             outbox.publish(Topics.LOYALTY_COMMANDS, order.id.toString(), ReverseRedemption(order.id.toString(), "SAGA_TIMEOUT"))
         }
         saga.timedOut()
+        recordDuration(saga, "timed_out")
     }
 
     private fun withRunningSaga(orderId: UUID, trigger: String, block: (Order, CheckoutSaga) -> Unit) {
@@ -175,6 +182,16 @@ class CheckoutSagaOrchestrator(
         slots.confirm(order.id, now)
         saga.complete()
         events.paid(order)
+        recordDuration(saga, "completed")
+    }
+
+    /** 결제 시작 → 결과 확정까지의 시간. 고객이 "결제 중" 화면을 보는 시간이며, 부하 테스트에서 병목을 찾은 지표다. */
+    private fun recordDuration(saga: CheckoutSaga, outcome: String) {
+        Timer.builder("brewslot.checkout.saga.duration")
+            .tag("outcome", outcome)
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .register(meterRegistry)
+            .record(Duration.between(saga.startedAt, clock.instant()))
     }
 
     private fun cancel(order: Order, reason: CancelReason) {

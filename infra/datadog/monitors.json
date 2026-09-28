@@ -1,0 +1,50 @@
+[
+  {
+    "name": "[BrewSlot] 결제 Saga p95 지연 — 고객이 '결제 중' 화면에서 기다리는 시간",
+    "type": "query alert",
+    "query": "avg(last_10m):max:brewslot.checkout.saga.duration.percentile{phi:0.95,outcome:completed} by {env} > 3",
+    "message": "결제 시작 → 주문 확정 p95 가 {{value}}초입니다.\n1) payment/loyalty 소비자 lag 확인 (과거 원인: 리스너 동시성 1 → docs/performance/load-test.md)\n2) brewslot.outbox.pending 적체 확인\n@slack-backend-oncall",
+    "options": { "thresholds": { "critical": 3, "warning": 1 }, "notify_no_data": false, "require_full_window": false },
+    "tags": ["service:order-service", "team:backend", "domain:checkout"]
+  },
+  {
+    "name": "[BrewSlot] 결제 Saga 타임아웃 발생 — PG 결과 불명 또는 소비자 정지",
+    "type": "query alert",
+    "query": "sum(last_10m):sum:brewslot.checkout.saga.duration.count{outcome:timed_out}.as_count() > 5",
+    "message": "10분간 결제 Saga 타임아웃 {{value}}건. 보상(환불·혜택 복원)은 자동으로 나갔지만 원인 확인이 필요합니다.\nbrewslot.payment.result{result:unknown} 와 PG 상태를 함께 보세요.\n@slack-backend-oncall",
+    "options": { "thresholds": { "critical": 5, "warning": 1 }, "notify_no_data": false },
+    "tags": ["service:order-service", "team:backend", "domain:checkout"]
+  },
+  {
+    "name": "[BrewSlot] Outbox 미발행 적체",
+    "type": "query alert",
+    "query": "avg(last_5m):max:brewslot.outbox.pending{*} by {service} > 1000",
+    "message": "{{service.name}} outbox 미발행 {{value}}건. Kafka 연결 또는 릴레이(advisory lock 보유 인스턴스)를 확인하세요. 발행이 멈추면 결제·정산 이벤트가 모두 늦어집니다.\n@slack-backend-oncall",
+    "options": { "thresholds": { "critical": 1000, "warning": 200 }, "notify_no_data": false },
+    "tags": ["team:backend", "domain:messaging"]
+  },
+  {
+    "name": "[BrewSlot] DLT 로 격리된 메시지 발생",
+    "type": "query alert",
+    "query": "sum(last_5m):sum:brewslot.kafka.dlt{*} by {topic}.as_count() > 0",
+    "message": "{{topic.name}} 메시지가 재시도 후 DLT 로 이동했습니다. 자동 복구되지 않는 유일한 경로입니다. 로그 com.brewslot.messaging.DeadLetter 확인 후 재처리하세요.\n@slack-backend-oncall",
+    "options": { "thresholds": { "critical": 0 }, "notify_no_data": false },
+    "tags": ["team:backend", "domain:messaging"]
+  },
+  {
+    "name": "[BrewSlot] 픽업 약속 지연 — 제조 완료가 약속 시각보다 늦음",
+    "type": "query alert",
+    "query": "avg(last_15m):max:brewslot.pickup.promise.lateness.percentile{phi:0.9} by {store} > 60",
+    "message": "매장 {{store.name}} 의 제조 완료가 약속 시각보다 p90 {{value}}초 늦습니다. 스테이션 용량 설정이 실제 인력보다 높을 수 있습니다(매장 용량 조정 안내).\n@slack-store-ops",
+    "options": { "thresholds": { "critical": 60, "warning": 0 }, "notify_no_data": false },
+    "tags": ["service:order-service", "team:backend", "domain:scheduling"]
+  },
+  {
+    "name": "[BrewSlot] 슬롯 사용량 캐시 폴백 — Redis 장애",
+    "type": "query alert",
+    "query": "sum(last_5m):sum:brewslot.slot.cache{result:fallback}.as_count() > 10",
+    "message": "픽업 가능 시각 조회가 Redis 대신 DB 로 폴백 중입니다({{value}}건). 정합성은 유지되지만 러시아워에 DB 부하가 커집니다.\n@slack-backend-oncall",
+    "options": { "thresholds": { "critical": 10 }, "notify_no_data": false },
+    "tags": ["service:order-service", "team:backend", "domain:scheduling"]
+  }
+]

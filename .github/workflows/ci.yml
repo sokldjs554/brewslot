@@ -25,6 +25,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Datadog 대시보드·모니터가 참조하는 지표가 코드에 있는지 검사
+        run: python3 infra/datadog/check_metrics.py
       - name: 공개 데모(site/) 스케줄러 ↔ 서버 스케줄러 결과 일치 검증 (테스트 벡터 500개)
         run: node site/verify.mjs services/order-service/build/scheduler-vectors.json
       - uses: actions/setup-python@v5

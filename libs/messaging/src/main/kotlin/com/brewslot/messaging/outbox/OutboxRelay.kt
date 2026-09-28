@@ -1,6 +1,7 @@
 package com.brewslot.messaging.outbox
 
 import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -39,6 +40,13 @@ class OutboxRelay(
         .description("outbox 적재부터 Kafka ack 까지의 지연")
         .publishPercentiles(0.5, 0.99)
         .register(meterRegistry)
+
+    init {
+        // 미발행 적체량. Kafka 장애·릴레이 정지를 "지연" 보다 먼저 드러낸다. 부분 인덱스(published_at IS NULL)라 조회가 싸다.
+        Gauge.builder("brewslot.outbox.pending") {
+            jdbc.sql("SELECT COUNT(*) FROM outbox_event WHERE published_at IS NULL").query(Long::class.java).single().toDouble()
+        }.description("아직 Kafka 로 발행되지 않은 outbox 행 수").register(meterRegistry)
+    }
 
     @Scheduled(fixedDelayString = "\${brewslot.outbox.poll-interval-ms:200}")
     fun relayScheduled() {
