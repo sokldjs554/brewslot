@@ -1,0 +1,97 @@
+{
+  "name": "BrewSlot · 매일 정산 마감 + PG 대사 → Slack",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 10 6 * * *" }] } },
+      "id": "b1b2c3d4-0002-4000-8000-000000000001",
+      "name": "매일 06:10 (KST)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": { "httpMethod": "POST", "path": "brewslot-settlement-run", "responseMode": "onReceived", "options": {} },
+      "id": "b1b2c3d4-0002-4000-8000-000000000002",
+      "name": "수동 실행 웹훅",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 200],
+      "webhookId": "5f1e2d3c-0002-4000-8000-00000000d1a2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 정산 대상일 = 어제(KST). 수동 실행 웹훅은 {\"businessDate\":\"YYYY-MM-DD\"} 로 지정 가능\nconst body = ($input.first().json.body) || {};\nconst kstNow = new Date(Date.now() + 9 * 3600 * 1000);\nkstNow.setUTCDate(kstNow.getUTCDate() - 1);\nconst businessDate = body.businessDate || kstNow.toISOString().slice(0, 10);\nreturn [{ json: { businessDate } }];"
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000003",
+      "name": "정산 대상일 계산",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SETTLEMENT_URL }}/reconciliation-runs",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ businessDate: $json.businessDate }) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000004",
+      "name": "PG 대사 실행",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SETTLEMENT_URL }}/settlement-runs",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ businessDate: $('정산 대상일 계산').first().json.businessDate }) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000005",
+      "name": "정산 마감 실행",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 대사 불일치가 있으면 경고, 없으면 요약만\nconst date = $('정산 대상일 계산').first().json.businessDate;\nconst recon = $('PG 대사 실행').first().json;\nconst statements = $input.all().map(i => i.json.draft || i.json).filter(d => d && d.storeId !== undefined);\nconst won = n => Number(n).toLocaleString('ko-KR') + '원';\nconst payout = statements.reduce((s, d) => s + Number(d.payout), 0);\nconst issues = recon.issues || [];\nconst head = issues.length\n  ? `:warning: ${date} PG 대사 불일치 ${issues.length}건 — 정산 지급 전 확인 필요`\n  : `:white_check_mark: ${date} PG 대사 일치 (${recon.matchedCount}건)`;\nconst byType = issues.reduce((m, i) => (m[i.type] = (m[i.type] || 0) + 1, m), {});\nconst detail = Object.entries(byType).map(([t, n]) => `• ${t}: ${n}건`).join('\\n');\nconst text = `${head}\\n정산서 ${statements.length}개 매장 · 지급 예정 ${won(payout)}${detail ? '\\n' + detail : ''}`;\nreturn [{ json: { text, issues: issues.length, stores: statements.length, payout } }];"
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000006",
+      "name": "Slack 메시지 작성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000007",
+      "name": "Slack 전송",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 100]
+    }
+  ],
+  "connections": {
+    "매일 06:10 (KST)": { "main": [[{ "node": "정산 대상일 계산", "type": "main", "index": 0 }]] },
+    "수동 실행 웹훅": { "main": [[{ "node": "정산 대상일 계산", "type": "main", "index": 0 }]] },
+    "정산 대상일 계산": { "main": [[{ "node": "PG 대사 실행", "type": "main", "index": 0 }]] },
+    "PG 대사 실행": { "main": [[{ "node": "정산 마감 실행", "type": "main", "index": 0 }]] },
+    "정산 마감 실행": { "main": [[{ "node": "Slack 메시지 작성", "type": "main", "index": 0 }]] },
+    "Slack 메시지 작성": { "main": [[{ "node": "Slack 전송", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "timezone": "Asia/Seoul" },
+  "active": false
+}

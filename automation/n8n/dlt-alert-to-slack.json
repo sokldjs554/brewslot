@@ -1,0 +1,54 @@
+{
+  "name": "BrewSlot · DLT 알림 → 적체 확인 → Slack",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "brewslot-dlt-alert", "responseMode": "onReceived", "options": {} },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Datadog 모니터 웹훅",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "5f1e2d3c-0001-4000-8000-00000000d1a1"
+    },
+    {
+      "parameters": { "url": "={{ $env.DLT_CONSOLE_URL }}/dlt/topics", "options": {} },
+      "id": "a1b2c3d4-0001-4000-8000-000000000002",
+      "name": "DLT 적체 조회 (dlt-console)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Datadog 알림 본문 + DLT 콘솔 조회 결과 → Slack 메시지\nconst alert = $('Datadog 모니터 웹훅').first().json.body || {};\nconst topics = $input.first().json;\nconst piled = Object.entries(topics).filter(([, n]) => n > 0);\nconst console_ = $env.DLT_CONSOLE_URL;\nconst lines = piled.map(([t, n]) => `• ${t}: ${n}건 → ${console_}/dlt/${t}/messages`);\nconst text = piled.length\n  ? `:rotating_light: DLT 격리 발생 (${alert.title || 'brewslot.kafka.dlt'})\\n${lines.join('\\n')}\\n원인 확인 후 dlt-console 로 재처리하세요 (중복 재처리는 409 로 막힘).`\n  : `:white_check_mark: DLT 알림을 받았지만 현재 적체는 0건입니다 (이미 재처리됨).`;\nreturn [{ json: { text, piled: piled.length } }];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000003",
+      "name": "Slack 메시지 작성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000004",
+      "name": "Slack 전송",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 0]
+    }
+  ],
+  "connections": {
+    "Datadog 모니터 웹훅": { "main": [[{ "node": "DLT 적체 조회 (dlt-console)", "type": "main", "index": 0 }]] },
+    "DLT 적체 조회 (dlt-console)": { "main": [[{ "node": "Slack 메시지 작성", "type": "main", "index": 0 }]] },
+    "Slack 메시지 작성": { "main": [[{ "node": "Slack 전송", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

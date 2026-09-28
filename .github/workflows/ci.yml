@@ -64,3 +64,11 @@ jobs:
         with:
           name: query-plans
           path: '**/build/query-plans/*.json'
+
+  n8n:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: n8n 워크플로 import · 활성화 · 웹훅 실행 → Slack 메시지 내용 검증
+        run: scripts/verify-n8n.sh

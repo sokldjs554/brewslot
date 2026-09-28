@@ -95,6 +95,19 @@ services:
       kafka: { condition: service_healthy }
     ports: ["8090:8090"]
 
+  n8n:
+    image: n8nio/n8n:1.94.1
+    profiles: ["automation"]
+    environment:
+      DLT_CONSOLE_URL: http://dlt-console:8090
+      SETTLEMENT_URL: http://settlement-service:8084
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-http://localhost:9/unset}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      GENERIC_TIMEZONE: Asia/Seoul
+    volumes:
+      - ./automation/n8n:/workflows:ro
+    ports: ["5678:5678"]
+
   prometheus:
     image: prom/prometheus:v3.5.0
     profiles: ["observability"]

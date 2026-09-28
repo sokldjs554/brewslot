@@ -27,7 +27,7 @@
     "name": "[BrewSlot] DLT 로 격리된 메시지 발생",
     "type": "query alert",
     "query": "sum(last_5m):sum:brewslot.kafka.dlt{*} by {topic}.as_count() > 0",
-    "message": "{{topic.name}} 메시지가 재시도 후 DLT 로 이동했습니다. 자동 복구되지 않는 유일한 경로입니다. 로그 com.brewslot.messaging.DeadLetter 확인 후 재처리하세요.\n@slack-backend-oncall",
+    "message": "{{topic.name}} 메시지가 재시도 후 DLT 로 이동했습니다. 자동 복구되지 않는 유일한 경로입니다. 로그 com.brewslot.messaging.DeadLetter 확인 후 dlt-console 로 재처리하세요.\n@slack-backend-oncall @webhook-n8n-brewslot-dlt-alert",
     "options": { "thresholds": { "critical": 0 }, "notify_no_data": false },
     "tags": ["team:backend", "domain:messaging"]
   },
