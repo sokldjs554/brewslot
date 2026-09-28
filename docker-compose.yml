@@ -77,6 +77,15 @@ services:
       PAYMENT_SERVICE_URL: http://payment-service:8082
     ports: ["8084:8084"]
 
+  notification-service:
+    build: { context: ., args: { SERVICE: notification-service } }
+    restart: on-failure
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+    depends_on:
+      kafka: { condition: service_healthy }
+    ports: ["8085:8085"]
+
   prometheus:
     image: prom/prometheus:v3.5.0
     profiles: ["observability"]

@@ -9,6 +9,7 @@ include(
     "services:payment-service",
     "services:loyalty-service",
     "services:settlement-service",
+    "services:notification-service",
     "e2e",
 )
 

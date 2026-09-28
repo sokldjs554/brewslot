@@ -45,6 +45,8 @@ data class OrderPreparing(
     val orderId: String,
     val storeId: Long,
     val acceptedAt: Instant,
+    /** 추가 필드(하위 호환): 알림 서비스가 주문→회원 매핑을 따로 들고 있지 않아도 되도록 */
+    val memberId: Long = 0,
 )
 
 data class OrderReady(

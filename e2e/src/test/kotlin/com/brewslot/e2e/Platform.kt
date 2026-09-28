@@ -1,6 +1,7 @@
 package com.brewslot.e2e
 
 import com.brewslot.loyalty.LoyaltyServiceApplication
+import com.brewslot.notification.NotificationServiceApplication
 import com.brewslot.order.OrderServiceApplication
 import com.brewslot.payment.PaymentServiceApplication
 import com.brewslot.settlement.SettlementServiceApplication
@@ -18,6 +19,7 @@ object Platform {
     lateinit var payment: ConfigurableApplicationContext
     lateinit var loyalty: ConfigurableApplicationContext
     lateinit var settlement: ConfigurableApplicationContext
+    lateinit var notification: ConfigurableApplicationContext
 
     private var started = false
 
@@ -59,6 +61,16 @@ object Platform {
             "brewslot.order.saga-timeout" to "4s",
             "brewslot.order.expiry-poll-ms" to "500",
         )
+        // WebFlux(Netty) 서비스. DB 가 없으므로 공통 설정 중 Kafka·포트만 넘긴다.
+        notification = SpringApplicationBuilder(NotificationServiceApplication::class.java).run(
+            "--spring.config.name=notification-service",
+            "--server.port=0",
+            "--spring.kafka.bootstrap-servers=${Containers.kafka.bootstrapServers}",
+            "--spring.main.banner-mode=off",
+        )
+        // 알림 소비자는 latest 부터 읽으므로, 파티션을 배정받은 뒤에 테스트를 시작한다.
+        notification.getBean(org.springframework.kafka.config.KafkaListenerEndpointRegistry::class.java)
+            .listenerContainers.forEach { org.springframework.kafka.test.utils.ContainerTestUtils.waitForAssignment(it, 3) }
         started = true
     }
 

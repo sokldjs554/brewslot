@@ -1,0 +1,43 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: notification-service
+  main:
+    # 같은 JVM 에 Servlet(MVC) 이 함께 있어도(E2E) 이 서비스는 항상 Reactive(Netty) 로 뜬다.
+    web-application-type: reactive
+  autoconfigure:
+    # DB·Outbox 를 쓰지 않는 서비스. 클래스패스에 있더라도(E2E) 켜지지 않게 한다.
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration
+      - com.brewslot.messaging.MessagingAutoConfiguration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      # SSE 연결은 여러 인스턴스에 흩어져 있으므로 인스턴스마다 "모든" 주문 이벤트를 받아야 한다(브로드캐스트 소비).
+      # 그래서 소비자 그룹을 인스턴스마다 다르게 두고, 재시작 시에는 지난 이벤트를 다시 읽지 않는다(latest).
+      group-id: notification-${random.uuid}
+      auto-offset-reset: latest
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  datadog:
+    metrics:
+      export:
+        enabled: ${DATADOG_ENABLED:false}
+        api-key: ${DD_API_KEY:none}
+  metrics:
+    tags:
+      service: notification-service
+
+brewslot:
+  notification:
+    replay-size: 20
+    heartbeat: 15s

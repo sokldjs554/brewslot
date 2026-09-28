@@ -37,7 +37,7 @@ class OrderEvents(private val outbox: Outbox) {
         ),
     )
 
-    fun preparing(o: Order) = publish(o, OrderPreparing(o.id.toString(), o.storeId, o.preparingAt!!))
+    fun preparing(o: Order) = publish(o, OrderPreparing(o.id.toString(), o.storeId, o.preparingAt!!, o.memberId))
 
     fun ready(o: Order) = publish(o, OrderReady(o.id.toString(), o.memberId, o.storeId, o.promisedPickupAt, o.readyAt!!))
 

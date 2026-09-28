@@ -115,9 +115,22 @@ class OrderToSettlementE2ETest {
     private val happyMember = 700_000L + (System.nanoTime() % 10_000)
     private lateinit var happyOrderId: String
 
+    /** 고객 앱처럼 알림 스트림(SSE)을 열어 두고 받은 이벤트 종류를 모은다. */
+    private fun openNotifications(memberId: Long): MutableList<String> {
+        val received = java.util.Collections.synchronizedList(mutableListOf<String>())
+        org.springframework.web.reactive.function.client.WebClient.create("http://localhost:${Platform.port(Platform.notification)}")
+            .get().uri("/notifications/stream").header("X-Member-Id", memberId.toString())
+            .retrieve().bodyToFlux(object : ParameterizedTypeReference<org.springframework.http.codec.ServerSentEvent<String>>() {})
+            .filter { it.event() != null }
+            .subscribe { received.add(it.event()!!) }
+        return received
+    }
+
     @Test
     @Order(1)
     fun `정상 흐름 - 포인트+카드 복합결제 후 픽업하면 카드 결제액 기준으로 적립된다`() {
+        val notifications = openNotifications(happyMember)
+        Thread.sleep(300)
         grant(happyMember, 3_000)
         happyOrderId = place(happyMember, pickupSoon(20), 2_000, 1002L to 2, 1005L to 1) // 3,500×2 + 6,000 = 13,000
         pay(happyMember, happyOrderId, "tok_visa")
@@ -135,6 +148,11 @@ class OrderToSettlementE2ETest {
         storeStatus(happyOrderId, "PICKED_UP")
 
         await atMost slow untilAsserted { assertThat(balance(happyMember)).isEqualTo(1_000 + 330) } // 11,000 × 3%
+
+        // 알림 서비스(WebFlux)가 order.events 를 받아 이 회원의 열린 연결로 실시간 전달했다.
+        await atMost slow untilAsserted {
+            assertThat(notifications).containsSubsequence("OrderPaid", "OrderPreparing", "OrderReady", "OrderPickedUp")
+        }
     }
 
     @Test
