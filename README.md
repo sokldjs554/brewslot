@@ -40,7 +40,10 @@
 | **이벤트(쿠폰)** | 선착순 50명 동시 요청 → **정확히 10장**, 쿠폰+포인트를 한 트랜잭션으로 사용·보상, 할인액 조작은 결제 단계에서 거절 |
 | **성능** | 부하 300 req/s에서 주문 p95 **34ms**, Saga p95 **13.7s → 0.46s** (Kafka 소비 병목 발견·수정) |
 | **쿼리 튜닝** | 5개 핫 쿼리 before/after 실측 — Outbox 폴링 **140.9ms → 0.08ms**, 정산 마감 **161ms → 4.3ms** |
-| **품질** | 테스트 **97개** (단위·Testcontainers 통합·**실행계획 회귀**·**API 드리프트**·**4서비스 E2E**·Python) |
+| **실시간 알림** | Spring **WebFlux** SSE 서비스 — 파드가 여러 개여도 알림 전달(브로드캐스트 소비), 재연결 시 `Last-Event-ID` 로 이어받기 |
+| **운영 자동화** | DLT 재처리 콘솔(**FastAPI** · aiokafka, 중복 재처리 409) + **n8n** 워크플로(DLT 알림 → Slack, 매일 정산·대사 요약) |
+| **배포** | **Kubernetes**(Kustomize · 프로브 분리 · 무중단 롤링 · HPA · PDB) — CI 가 kind 클러스터에 배포하고 주문→결제→SSE 알림까지 스모크 테스트 |
+| **품질** | 테스트 **113개** (단위·Testcontainers 통합·**실행계획 회귀**·**API 드리프트**·**E2E**·Python) + n8n · K8s 배포 검증 |
 | **모니터링** | Datadog 대시보드·모니터 6종을 코드로 관리, 참조 지표가 코드에 있는지 CI 가 검사 |
 | **AI-Driven** | Claude Code 로 PRD→설계→구현→검증→문서 전 과정 수행. 커맨드·서브에이전트·훅·PR 리뷰 자동화 포함 |
 
@@ -80,6 +83,9 @@ flowchart LR
     subgraph settlement-service
       S[정산 · 대사]
     end
+    subgraph notification-service
+      N[실시간 알림<br/>WebFlux SSE]
+    end
 
     O -- payment.commands --> K[(Kafka)]
     O -- loyalty.commands --> K
@@ -91,6 +97,10 @@ flowchart LR
     K -- 돈의 사실 --> S
     K -- OrderPickedUp --> L
     S -. PG 정산 파일 HTTP .-> P
+    K -- order.events<br/>브로드캐스트 --> N
+    N -. SSE .-> C
+    D[dlt-console<br/>FastAPI] -. DLT 조회·재처리 .-> K
+    W[n8n] -. 알림·정산 요약 .-> D & S
 
     O --- ODB[(order_db)] & R[(Redis<br/>슬롯 사용량)]
     P --- PDB[(payment_db)]
@@ -171,6 +181,16 @@ sequenceDiagram
 - 할인액은 주문 시 **고객이 본 금액**을 기록하고 결제 단계에서 loyalty-service 가 검증 — 주문 경로에 서비스 간 동기 호출이 없다.
 - 할인 비용은 브랜드 부담(차: 브랜드 프로모션 비용 / 대: 매장 정산 채권). 매장은 정가 기준으로 정산받고 정산서에 `couponSales` 가 따로 보인다.
 
+### 9. 실시간 알림 — [ADR-0011](docs/adr/0011-realtime-notification-webflux-sse.md)
+- 출근 시간에는 결제를 마친 고객 대부분이 앱을 열어 둔 채 기다린다 → 연결 수가 주문 수보다 훨씬 많다. 연결이 스레드를 붙잡지 않도록 **WebFlux(Netty) + SSE** 별도 서비스.
+- 파드마다 다른 소비자 그룹으로 **모든 주문 이벤트를 받고**, 자기에게 연결된 회원 것만 내보낸다 → 연결이 어느 파드에 붙어도 알림이 간다.
+- 회원별 최근 20건 replay + `Last-Event-ID` 커서로 지하철에서 끊겼다 붙어도 놓친 알림을 이어 받는다. 15초 keep-alive 로 프록시 유휴 끊김 방지.
+
+### 10. DLT 재처리 · 운영 자동화 — [ADR-0012](docs/adr/0012-dlt-replay-console.md)
+- DLT 는 자동 복구되지 않는 유일한 경로다. **FastAPI 콘솔**이 소비자 그룹 없이 DLT 를 읽어 원래 토픽·실패 원인을 보여주고, 원인을 고친 뒤 **원 토픽으로 재발행**한다.
+- 재처리 기록(compacted 토픽)으로 같은 메시지 **두 번 재처리는 409**. 설령 두 번 가도 소비자 Inbox 가 한 번만 반영한다.
+- **n8n**: Datadog DLT 모니터 → 콘솔에서 적체 토픽 조회 → Slack. 매일 06:10 전날 PG 대사 → 정산 마감(멱등) → 불일치·지급 예정액 Slack 요약. 워크플로 JSON 을 CI 에서 실제 n8n 으로 실행해 검증 → [automation/n8n](automation/n8n)
+
 <br>
 
 ## 실패 시나리오 (전부 테스트로 고정)
@@ -192,6 +212,9 @@ sequenceDiagram
 | 같은 지갑 동시 사용 20건 | 잔액 초과 사용 0 | Loyalty IT |
 | 마감 후 과거 거래 도착 | 다음 정산서에 이월 | Settlement IT |
 | 차/대 불균형 분개 | DB 가 커밋 거부 | Loyalty IT |
+| 앱이 잠깐 끊겼다 재연결 | `Last-Event-ID` 이후 알림만 이어 받음 | Notification IT |
+| 같은 DLT 메시지 두 번 재처리 | 409, 의도한 경우만 `force` | pytest (실제 Kafka) |
+| order-service 롤링 재시작 | 재시작 후에도 주문·결제 정상 (maxUnavailable 0 · graceful shutdown) | K8s 스모크 (kind) |
 
 <br>
 
@@ -235,12 +258,16 @@ sequenceDiagram
 | 실행계획 회귀 | 운영 규모 데이터에서 인덱스·Sort·Seq Scan 단언 | 4 |
 | API 드리프트 | 설계 명세(`docs/api`) ↔ 구현(springdoc) 경로·메서드·필수 헤더 | 2 |
 | 아키텍처 | 도메인 계층의 프레임워크 무의존 (ArchUnit) | 3 |
-| **E2E** | 4개 서비스를 한 JVM 에서 실제 Kafka 로 연결: 복합결제→픽업→적립→정산→대사, 거절, 타임아웃, 쿠폰 사용·보상·조작 거절, 재주문 | 7 |
+| 실시간 알림 (WebFlux) | 알림 변환 규칙·재연결 커서 단위 4, 실제 Kafka → SSE 수신·`Last-Event-ID` 이어받기 통합 2 | 6 |
+| **E2E** | 5개 서비스를 한 JVM 에서 실제 Kafka 로 연결: 복합결제→픽업→적립→정산→대사(+ 고객 SSE 알림 수신), 거절, 타임아웃, 쿠폰 사용·보상·조작 거절, 재주문 | 7 |
 | 데모 교차검증 | 서버 스케줄러로 무작위 시나리오 500개를 만들어 공개 데모 스크립트와 결과 비교 | 1 |
 | plan-doctor (Python) | 진단 규칙, CI 게이트, Claude 요청 형태 | 9 |
+| dlt-console (Python) | 조회·재처리·중복 409·토큰 단위 9, Testcontainers 실제 Kafka 통합 1 | 10 |
+| n8n 워크플로 | 실제 n8n 컨테이너에 import·활성화 → 웹훅 실행 → Slack 메시지 내용 확인 | CI |
+| Kubernetes 배포 | kind 클러스터에 전체 배포 → 주문→결제→PAID→SSE 알림→DLT 콘솔→롤링 재시작 후 재주문 | CI |
 
 ```bash
-./gradlew build     # Docker 필요. ktlint + 88개 JVM 테스트
+./gradlew build     # Docker 필요. ktlint + 94개 JVM 테스트
 ```
 
 <br>
@@ -278,6 +305,11 @@ done
 # 또는 전부 컨테이너로: docker compose up --build
 
 # 3) Swagger UI: http://localhost:8081/swagger-ui.html · 설계 명세: docs/api/order-service.yaml
+#    SSE 알림: curl -N -H 'X-Member-Id: 1' localhost:8085/notifications/stream · DLT 콘솔: localhost:8090/docs
+#    n8n: docker compose --profile automation up n8n
+
+# Kubernetes (kind) — deploy/k8s/README.md
+kubectl apply -k deploy/k8s/overlays/kind && scripts/k8s-smoke.sh
 ```
 
 **▶ 데모:** 서비스를 띄운 뒤 `./scripts/demo.sh` — 12개 장면(주문·Saga·쏠림·보상·PG 유실 복구·정산·대사)을 설명과 함께 실행한다.
@@ -318,13 +350,15 @@ curl -XPOST localhost:8084/reconciliation-runs -H 'Content-Type: application/jso
 
 | 영역 | 사용 |
 |---|---|
-| Language / Framework | Kotlin 2.2, Java 21, Spring Boot 3.5 (Web, JDBC, Kafka, Data Redis, Cache, Actuator), Python 3.12 (도구) |
+| Language / Framework | Kotlin 2.2, Java 21, Spring Boot 3.5 (Web MVC, **WebFlux**, JDBC, Kafka, Data Redis, Cache, Actuator), Python 3.12 (**FastAPI**, aiokafka) |
 | Data | PostgreSQL 16 (Flyway, 부분 인덱스, advisory lock, 제약 트리거), Redis 7 (Lua), Caffeine |
 | Messaging | Apache Kafka 3.9 (KRaft) — Outbox / Inbox / DLT |
 | API | REST, OpenAPI 3 (설계 우선 + 드리프트 테스트), RFC 9457 Problem Details, Idempotency-Key |
 | Observability | Micrometer (Prometheus / Datadog registry), OpenTelemetry tracing — Kafka 경계 `traceparent` 전파 |
 | Test | JUnit 5, AssertJ, Testcontainers, Awaitility, ArchUnit, k6, pytest |
-| DevEx | Gradle 멀티모듈, ktlint, GitHub Actions, Docker Compose, **Claude Code** |
+| Infra / Deploy | Docker, **Kubernetes** (Kustomize, HPA, PDB), kind, Docker Compose, GitHub Actions |
+| Automation | **n8n** (Webhook · Schedule · HTTP · Code 노드) |
+| DevEx | Gradle 멀티모듈, ktlint, **Claude Code** |
 
 ### 관측 지표 · Datadog — [infra/datadog](infra/datadog)
 `DATADOG_ENABLED=true DD_API_KEY=...` 로 전송. 대시보드와 모니터 6종(Saga p95, Saga 타임아웃, Outbox 적체, DLT, 픽업 약속 지연, Redis 폴백)을 JSON 으로 관리하고,
@@ -348,8 +382,13 @@ brewslot
 │   ├── order-service       catalog / scheduling / ordering(+saga) / query(CQRS)
 │   ├── payment-service     결제 + Fake PG(승인·거절·타임아웃·정산 파일)
 │   ├── loyalty-service     복식부기 포인트 원장 · 쿠폰 이벤트
-│   └── settlement-service  정산 마감 · PG 대사
-├── e2e                 4개 서비스 한 JVM E2E
+│   ├── settlement-service  정산 마감 · PG 대사
+│   ├── notification-service 실시간 알림 (WebFlux · SSE)
+│   └── dlt-console         DLT 조회 · 재처리 (Python · FastAPI)
+├── e2e                 5개 서비스 한 JVM E2E
+├── deploy/k8s          Kubernetes (Kustomize base · kind overlay)
+├── automation/n8n      운영 자동화 워크플로 + 검증용 모의 서버
+├── infra/datadog       대시보드 · 모니터 (코드로 관리)
 ├── tools/plan-doctor   실행계획 진단 (Python, Claude API)
 ├── scripts/query-lab   쿼리 튜닝 재현 실험
 ├── load-test           k6 시나리오

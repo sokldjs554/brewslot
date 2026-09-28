@@ -12,3 +12,5 @@
 | [0008](0008-explicit-sql-over-jpa.md) | JPA 대신 **JdbcClient + 명시적 SQL**, 도메인 모델은 프레임워크 무의존 | 채택 |
 | [0009](0009-monorepo-multiservice.md) | 모노레포 멀티 서비스 + **한 JVM 에서 4개 서비스를 띄우는 E2E** | 채택 |
 | [0010](0010-coupon-promotion.md) | 쿠폰 이벤트: **선착순은 조건부 UPDATE**, 쿠폰은 포인트와 **한 로컬 트랜잭션**, 할인액은 **고객이 본 금액을 결제 때 검증** | 채택 |
+| [0011](0011-realtime-notification-webflux-sse.md) | 실시간 알림은 **WebFlux SSE** 별도 서비스, 파드마다 **브로드캐스트 소비**, `Last-Event-ID` 로 재연결 이어받기 | 채택 |
+| [0012](0012-dlt-replay-console.md) | DLT 재처리는 **FastAPI 콘솔**(원 토픽 재발행 · 중복 재처리 409), 알림은 **n8n** | 채택 |

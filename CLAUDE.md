@@ -11,6 +11,9 @@
 ./gradlew ktlintFormat                            # 포맷
 docker compose up -d postgres kafka redis         # 로컬 인프라
 python -m plan_doctor.cli 'services/*/build/query-plans/*.json'       # (tools/plan-doctor) 실행계획 진단
+(cd services/dlt-console && pytest -q)            # DLT 콘솔 (FastAPI)
+scripts/verify-n8n.sh                             # n8n 워크플로 실제 실행 검증
+kubectl kustomize deploy/k8s/overlays/kind        # K8s 매니페스트 렌더링 (배포·스모크는 CI k8s.yml)
 ```
 Docker 가 필요하다(Testcontainers). H2 로 바꾸지 않는다 — 핵심 로직이 PostgreSQL 고유 동작(잠금 순서, SKIP LOCKED, 부분 인덱스)에 기댄다.
 
@@ -22,7 +25,10 @@ libs/web         RFC 9457 오류 응답
 libs/messaging   이벤트 계약(contract/), Outbox, Inbox, DLT 에러 핸들러
 libs/test-support Testcontainers 싱글톤, MutableClock, QueryPlan(실행계획 단언)
 services/*       각 서비스: domain(순수) / application / infra / api
-e2e              4개 서비스를 한 JVM 에서 띄우는 전체 흐름 테스트
+                 notification-service 는 WebFlux(Reactive) — 블로킹 호출 금지. dlt-console 은 Python(FastAPI)
+e2e              5개 서비스를 한 JVM 에서 띄우는 전체 흐름 테스트
+deploy/k8s       Kustomize. 서비스·환경변수를 추가하면 여기와 docker-compose.yml 을 함께 고친다
+automation/n8n   운영 워크플로 JSON. 서비스 API 응답 형식을 바꾸면 mock_endpoints.py 도 맞춘다
 ```
 
 ## 반드시 지킬 규칙

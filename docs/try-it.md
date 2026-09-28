@@ -47,11 +47,11 @@
 | 결제 Saga | `services/order-service/.../ordering/saga/CheckoutSagaOrchestrator.kt` |
 | PG 결과 불명 복구 | `services/payment-service/.../application/PaymentService.kt` |
 | 복식부기 원장 + DB 트리거 | `services/loyalty-service/src/main/resources/db/migration/loyalty/V1__loyalty_schema.sql` |
-| 설계 결정 9건 | `docs/adr/` |
+| 설계 결정 12건 | `docs/adr/` |
 
 ## 4. 테스트 돌려 보기
 
 ```bash
 ./scripts/stop-all.sh                      # 데모용 인프라를 내리고
-./gradlew build                            # 88개 JVM 테스트 (Testcontainers 로 DB·Kafka·Redis 를 직접 띄움, 약 5분)
+./gradlew build                            # 94개 JVM 테스트 (Testcontainers 로 DB·Kafka·Redis 를 직접 띄움, 약 5분)
 ```
