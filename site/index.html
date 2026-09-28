@@ -83,6 +83,23 @@ button:disabled { cursor: not-allowed; }
 .devpanel .dev-tbl th { background: #2a2521; color: #cfc6bc; font-weight: 600; position: static; }
 .devpanel .dev-tbl td { background: transparent; color: #efe9e2; }
 .devpanel .dev-tbl code { background: none; color: #f2c9a0; padding: 0; }
+/* 개발자 보기 = 별도 화면: 헤더 아래 전체를 덮는다 */
+.devpanel { inset: 57px 0 0 0; right: 0; bottom: 0; width: auto; max-height: none; border-radius: 0; box-shadow: none; font-size: 14px; }
+.devpanel .dh { padding: 14px max(20px, calc((100vw - 1100px) / 2)); }
+.devpanel .dh b { font-size: 16px; }
+.devpanel .dtabs { max-width: 560px; }
+.devpanel .dtabs button { font-size: 14px; padding: 7px 10px; }
+.devpanel .dbody { padding: 8px max(20px, calc((100vw - 1100px) / 2)) 40px; }
+.devpanel .dbody ul { padding: 6px 0; }
+.devpanel .dev-note, .devpanel .dev-h { padding-left: 0; padding-right: 0; }
+.devpanel .dev-tbl { width: 100%; margin: 6px 0 10px; font-size: 13px; }
+.devpanel .meta { font-size: 12.5px; } .devpanel pre { font-size: 12.5px; }
+.devpanel .back { background: #efe9e2; color: #1b1815; border: 0; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 700; }
+body.dev-open { overflow: hidden; }
+.devpanel .dh { flex-wrap: wrap; row-gap: 10px; }
+.devpanel .dh b, .devpanel .dtabs button, .devpanel .back { white-space: nowrap; word-break: keep-all; }
+.devpanel .back { margin-left: auto; }
+@media (max-width: 640px) { .devpanel .dtabs { order: 3; flex-basis: 100%; max-width: none; } .devpanel .dbody { padding-top: 4px; } }
 .switch-view { display: none; }
 
 /* ── layout ── */
@@ -1132,10 +1149,12 @@ footer a { color: inherit; }
   function renderDev() {
     const el = $('devPanel');
     el.hidden = !st.showCodes;
+    document.body.classList.toggle('dev-open', st.showCodes);
     if (!st.showCodes) return;
+    el.style.top = document.querySelector('header.top').offsetHeight + 'px';
     const keep = el.querySelector('.dbody') ? el.querySelector('.dbody').scrollTop : 0;
     const body = { events: devEvents, api: devApi, slots: devSlots, money: devMoney }[st.devTab]();
-    el.innerHTML = `<div class="dh"><b>개발자 보기</b><div class="dtabs">${DEV_TABS.map(([k, n]) => `<button data-dev-tab="${k}" aria-pressed="${st.devTab === k}">${n}</button>`).join('')}</div><button data-dev-close aria-label="닫기">✕</button></div><div class="dbody">${body}</div>`;
+    el.innerHTML = `<div class="dh"><b>개발자 보기</b><div class="dtabs">${DEV_TABS.map(([k, n]) => `<button data-dev-tab="${k}" aria-pressed="${st.devTab === k}">${n}</button>`).join('')}</div><button class="back" data-dev-close>← 데모로 돌아가기</button></div><div class="dbody">${body}</div>`;
     el.querySelector('.dbody').scrollTop = keep;
   }
   function renderAll() { renderPhone(); renderStore(); renderDev(); dirty = false; updateLive(); }
