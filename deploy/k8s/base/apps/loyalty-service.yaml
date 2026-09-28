@@ -1,0 +1,95 @@
+# 포인트 원장 · 쿠폰
+apiVersion: v1
+kind: Service
+metadata:
+  name: loyalty-service
+  labels: { app: loyalty-service }
+spec:
+  selector: { app: loyalty-service }
+  ports: [{ name: http, port: 8083, targetPort: http }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loyalty-service
+  labels: { app: loyalty-service, app.kubernetes.io/part-of: brewslot }
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector: { matchLabels: { app: loyalty-service } }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app: loyalty-service, app.kubernetes.io/part-of: brewslot }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8083"
+    spec:
+      # 서비스 링크가 주입하는 REDIS_PORT=tcp://… 가 Spring 의 ${REDIS_PORT} 를 덮어쓰지 않도록 끈다
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile: { type: RuntimeDefault }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: { matchLabels: { app: loyalty-service } }
+      # 의존 인프라가 포트를 열 때까지 대기 (앱 이미지의 bash 로 확인해 별도 이미지 pull 이 없다)
+      initContainers:
+        - name: wait-for-deps
+          image: brewslot/loyalty-service
+          imagePullPolicy: IfNotPresent
+          command: ["bash", "-c", "for d in postgres:5432 kafka:9092; do until (echo > /dev/tcp/${d%:*}/${d#*:}) 2>/dev/null; do echo waiting $d; sleep 2; done; done"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+      containers:
+        - name: app
+          image: brewslot/loyalty-service
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8083 }]
+          envFrom:
+            - configMapRef: { name: brewslot-common }
+            - secretRef: { name: brewslot-db }
+          env:
+            - { name: SERVER_SHUTDOWN, value: graceful }
+            - { name: MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED, value: "true" }
+            - { name: MANAGEMENT_METRICS_TAGS_POD, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+          # Flyway 마이그레이션까지 끝나야 기동 완료. 기동 중에는 liveness 가 파드를 죽이지 않도록 startupProbe 로 분리
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 5
+            failureThreshold: 2
+          lifecycle:
+            # 엔드포인트에서 빠지는 시간을 벌어 롤링 업데이트 중 요청 유실을 막는다
+            preStop: { sleep: { seconds: 5 } }
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}

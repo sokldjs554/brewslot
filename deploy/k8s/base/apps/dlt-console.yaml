@@ -1,0 +1,50 @@
+# DLT 재처리 콘솔 (FastAPI). 운영 토큰(X-Ops-Token)이 있어야 재처리할 수 있다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dlt-console
+  labels: { app: dlt-console }
+spec:
+  selector: { app: dlt-console }
+  ports: [{ name: http, port: 8090, targetPort: http }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dlt-console
+  labels: { app: dlt-console, app.kubernetes.io/part-of: brewslot }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: dlt-console } }
+  template:
+    metadata:
+      labels: { app: dlt-console, app.kubernetes.io/part-of: brewslot }
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: app
+          image: brewslot/dlt-console
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8090 }]
+          env:
+            - name: KAFKA_BOOTSTRAP
+              valueFrom: { configMapKeyRef: { name: brewslot-common, key: KAFKA_BOOTSTRAP } }
+            - name: OPS_TOKEN
+              valueFrom: { secretKeyRef: { name: brewslot-ops, key: OPS_TOKEN } }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }

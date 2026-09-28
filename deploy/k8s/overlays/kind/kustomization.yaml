@@ -1,0 +1,20 @@
+# kind(로컬 · CI) 배포: 이미지를 kind load 로 넣고, 비밀값은 개발용 값으로 생성한다.
+# 운영 오버레이에서는 secretGenerator 대신 External Secrets / AWS Secrets Manager 를 쓴다.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+secretGenerator:
+  - name: brewslot-db
+    namespace: brewslot
+    literals: [DB_USER=brewslot, DB_PASSWORD=brewslot]
+  - name: brewslot-ops
+    namespace: brewslot
+    literals: [OPS_TOKEN=local-ops-token]
+images:
+  - { name: brewslot/order-service, newTag: local }
+  - { name: brewslot/payment-service, newTag: local }
+  - { name: brewslot/loyalty-service, newTag: local }
+  - { name: brewslot/settlement-service, newTag: local }
+  - { name: brewslot/notification-service, newTag: local }
+  - { name: brewslot/dlt-console, newTag: local }

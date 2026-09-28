@@ -1,0 +1,62 @@
+name: Kubernetes (kind)
+
+# 실제 쿠버네티스 클러스터(kind)에 전체 스택을 배포하고 스모크 테스트까지 돌린다.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/**'
+      - 'services/**'
+      - 'libs/**'
+      - 'scripts/k8s-smoke.sh'
+      - '.github/workflows/k8s.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: k8s-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: bootJar 빌드 (한 번)
+        run: >
+          ./gradlew --console=plain
+          :services:order-service:bootJar :services:payment-service:bootJar :services:loyalty-service:bootJar
+          :services:settlement-service:bootJar :services:notification-service:bootJar
+      - name: 이미지 빌드
+        run: |
+          for s in order-service payment-service loyalty-service settlement-service notification-service; do
+            jar=$(ls services/$s/build/libs/$s-*.jar | grep -v -- '-plain.jar')
+            docker build -q -f deploy/docker/Dockerfile.jar --build-arg JAR="$jar" -t brewslot/$s:local .
+          done
+          docker build -q -t brewslot/dlt-console:local services/dlt-console
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: brewslot
+          version: v0.27.0
+          node_image: kindest/node:v1.32.2
+      - name: 이미지를 클러스터에 적재
+        run: |
+          for i in order-service payment-service loyalty-service settlement-service notification-service dlt-console; do
+            kind load docker-image brewslot/$i:local --name brewslot
+          done
+      - name: 배포 (kustomize)
+        run: kubectl apply -k deploy/k8s/overlays/kind
+      - name: 스모크 테스트
+        run: scripts/k8s-smoke.sh
+      - name: 실패 시 클러스터 상태
+        if: failure()
+        run: |
+          kubectl -n brewslot get all,events --sort-by=.metadata.creationTimestamp || true
+          for p in $(kubectl -n brewslot get pods -o name); do
+            echo "=== $p"; kubectl -n brewslot logs "$p" --all-containers --tail=80 || true
+          done
