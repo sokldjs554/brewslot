@@ -25,6 +25,9 @@ enum class OrderStatus {
 enum class CancelReason(val refundRequired: Boolean) {
     HOLD_EXPIRED(false),
     POINTS_INSUFFICIENT(false),
+
+    /** 쿠폰이 이미 사용·만료됐거나 할인액이 주문 시 금액과 다르다 */
+    COUPON_REJECTED(false),
     PAYMENT_DECLINED(false),
     PAYMENT_TIMEOUT(false),
     CUSTOMER_CANCELLED(true),
@@ -75,6 +78,9 @@ class Order private constructor(
     cancelledAt: Instant?,
     cancelReason: CancelReason?,
     version: Long,
+    /** 적용한 쿠폰. 할인액은 주문 시 고객이 본 금액이며 loyalty-service 가 결제 단계에서 실제 쿠폰과 대조한다. */
+    val couponId: UUID?,
+    val couponAmount: Money,
 ) {
     /** 낙관적 잠금 버전. 저장소가 UPDATE 성공 시 올린다. */
     var version: Long = version
@@ -96,7 +102,10 @@ class Order private constructor(
         private set
 
     val totalAmount: Money get() = lines.map { it.amount }.sum()
-    val cardAmount: Money get() = totalAmount - pointAmount
+    val cardAmount: Money get() = totalAmount - couponAmount - pointAmount
+
+    /** 포인트·쿠폰처럼 loyalty-service 가 처리하는 결제 수단이 있는가 (Saga 1단계 필요 여부) */
+    val hasBenefits: Boolean get() = pointAmount.isPositive || couponAmount.isPositive
 
     /** 결제가 완료되어 돈(카드/포인트)이 실제로 움직인 상태였는가 */
     val wasPaid: Boolean get() = paidAt != null
@@ -134,7 +143,7 @@ class Order private constructor(
     fun cancel(reason: CancelReason, now: Instant) {
         val allowedFrom = when (reason) {
             CancelReason.HOLD_EXPIRED -> setOf(OrderStatus.PENDING_PAYMENT)
-            CancelReason.POINTS_INSUFFICIENT, CancelReason.PAYMENT_DECLINED, CancelReason.PAYMENT_TIMEOUT ->
+            CancelReason.POINTS_INSUFFICIENT, CancelReason.COUPON_REJECTED, CancelReason.PAYMENT_DECLINED, CancelReason.PAYMENT_TIMEOUT ->
                 setOf(OrderStatus.PAYMENT_IN_PROGRESS)
             // 제조가 시작되면 고객 취소 불가 (이미 원가가 발생)
             CancelReason.CUSTOMER_CANCELLED -> setOf(OrderStatus.PENDING_PAYMENT, OrderStatus.PAID)
@@ -164,9 +173,13 @@ class Order private constructor(
             pointAmount: Money,
             holdExpiresAt: Instant,
             now: Instant,
+            couponId: UUID? = null,
+            couponAmount: Money = Money.ZERO,
         ): Order {
             require(lines.isNotEmpty()) { "주문 항목이 비어 있습니다." }
             require(!pointAmount.isNegative) { "사용 포인트는 0 이상이어야 합니다." }
+            require(!couponAmount.isNegative) { "쿠폰 할인액은 0 이상이어야 합니다." }
+            require((couponId == null) == (couponAmount == Money.ZERO)) { "쿠폰과 할인액은 함께 지정해야 합니다." }
             val order = Order(
                 id,
                 memberId,
@@ -185,8 +198,11 @@ class Order private constructor(
                 null,
                 null,
                 0,
+                couponId,
+                couponAmount,
             )
-            require(pointAmount <= order.totalAmount) { "사용 포인트가 주문 금액을 초과합니다." }
+            require(couponAmount <= order.totalAmount) { "쿠폰 할인액이 주문 금액을 초과합니다." }
+            require(pointAmount <= order.totalAmount - couponAmount) { "사용 포인트가 할인 후 금액을 초과합니다." }
             return order
         }
 
@@ -208,6 +224,8 @@ class Order private constructor(
             cancelledAt: Instant?,
             cancelReason: CancelReason?,
             version: Long,
+            couponId: UUID? = null,
+            couponAmount: Money = Money.ZERO,
         ) = Order(
             id,
             memberId,
@@ -226,6 +244,8 @@ class Order private constructor(
             cancelledAt,
             cancelReason,
             version,
+            couponId,
+            couponAmount,
         )
     }
 }

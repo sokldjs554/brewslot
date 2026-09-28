@@ -20,9 +20,9 @@ class JdbcOrderRepository(private val jdbc: JdbcClient) {
         jdbc.sql(
             """
             INSERT INTO orders (id, member_id, store_id, brand_id, status, promised_pickup_at, total_amount, point_amount,
-                                hold_expires_at, idempotency_key, request_hash, created_at, version)
+                                coupon_id, coupon_amount, hold_expires_at, idempotency_key, request_hash, created_at, version)
             VALUES (:id, :memberId, :storeId, :brandId, :status, :pickupAt, :total, :points,
-                    :holdExpiresAt, :idempotencyKey, :requestHash, :createdAt, 0)
+                    :couponId, :couponAmount, :holdExpiresAt, :idempotencyKey, :requestHash, :createdAt, 0)
             """.trimIndent(),
         )
             .param("id", order.id)
@@ -33,6 +33,8 @@ class JdbcOrderRepository(private val jdbc: JdbcClient) {
             .param("pickupAt", ts(order.promisedPickupAt))
             .param("total", order.totalAmount.won)
             .param("points", order.pointAmount.won)
+            .param("couponId", order.couponId)
+            .param("couponAmount", order.couponAmount.won)
             .param("holdExpiresAt", ts(order.holdExpiresAt))
             .param("idempotencyKey", idempotencyKey)
             .param("requestHash", requestHash)
@@ -111,7 +113,7 @@ class JdbcOrderRepository(private val jdbc: JdbcClient) {
     private fun findOne(where: String, params: Map<String, Any>, lock: Boolean): Order? {
         val header = jdbc.sql(
             """
-            SELECT id, member_id, store_id, brand_id, status, promised_pickup_at, point_amount, hold_expires_at, created_at,
+            SELECT id, member_id, store_id, brand_id, status, promised_pickup_at, point_amount, coupon_id, coupon_amount, hold_expires_at, created_at,
                    paid_at, preparing_at, ready_at, picked_up_at, cancelled_at, cancel_reason, version
             FROM orders $where ${if (lock) "FOR UPDATE" else ""}
             """.trimIndent(),
@@ -153,6 +155,8 @@ class JdbcOrderRepository(private val jdbc: JdbcClient) {
             cancelledAt = header.cancelledAt,
             cancelReason = header.cancelReason,
             version = header.version,
+            couponId = header.couponId,
+            couponAmount = Money(header.couponAmount),
         )
     }
 
@@ -173,6 +177,8 @@ class JdbcOrderRepository(private val jdbc: JdbcClient) {
         cancelledAt = getTimestamp("cancelled_at")?.toInstant(),
         cancelReason = getString("cancel_reason")?.let(CancelReason::valueOf),
         version = getLong("version"),
+        couponId = getObject("coupon_id", UUID::class.java),
+        couponAmount = getLong("coupon_amount"),
     )
 
     private data class Header(
@@ -192,6 +198,8 @@ class JdbcOrderRepository(private val jdbc: JdbcClient) {
         val cancelledAt: Instant?,
         val cancelReason: CancelReason?,
         val version: Long,
+        val couponId: UUID?,
+        val couponAmount: Long,
     )
 
     private fun ts(i: Instant) = Timestamp.from(i)

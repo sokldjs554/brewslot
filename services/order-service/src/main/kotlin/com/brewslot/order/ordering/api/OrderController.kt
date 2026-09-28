@@ -53,6 +53,8 @@ class OrderController(
                 items = request.items.map { it.toCartItem() },
                 pointsToUse = request.pointsToUse,
                 idempotencyKey = idempotencyKey,
+                couponId = request.couponId,
+                couponAmount = request.couponAmount,
             ),
         )
         return created(result.order, result.replayed)

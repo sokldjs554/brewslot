@@ -334,6 +334,16 @@ components:
               menuItemId: { type: integer, format: int64, example: 1002 }
               quantity: { type: integer, minimum: 1, maximum: 20 }
         pointsToUse: { type: integer, format: int64, minimum: 0, default: 0 }
+        couponId:
+          type: string
+          format: uuid
+          description: loyalty-service 쿠폰함(GET /members/{memberId}/coupons)에서 받은 쿠폰. couponAmount 와 함께 보낸다.
+        couponAmount:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
+          description: 고객이 본 할인액. 결제 단계에서 loyalty-service 가 실제 쿠폰과 대조하며, 다르면 주문은 COUPON_REJECTED 로 취소된다.
     Order:
       type: object
       properties:
@@ -342,6 +352,8 @@ components:
         storeId: { type: integer, format: int64 }
         promisedPickupAt: { type: string, format: date-time }
         totalAmount: { type: integer, format: int64 }
+        couponId: { type: string, format: uuid, nullable: true }
+        couponAmount: { type: integer, format: int64 }
         pointAmount: { type: integer, format: int64 }
         cardAmount: { type: integer, format: int64 }
         holdExpiresAt: { type: string, format: date-time, description: PENDING_PAYMENT 일 때만 }
@@ -360,7 +372,7 @@ components:
         readyAt: { type: string, format: date-time }
         pickedUpAt: { type: string, format: date-time }
         cancelledAt: { type: string, format: date-time }
-        cancelReason: { type: string, enum: [HOLD_EXPIRED, POINTS_INSUFFICIENT, PAYMENT_DECLINED, PAYMENT_TIMEOUT, CUSTOMER_CANCELLED, REJECTED_BY_STORE] }
+        cancelReason: { type: string, enum: [HOLD_EXPIRED, POINTS_INSUFFICIENT, COUPON_REJECTED, PAYMENT_DECLINED, PAYMENT_TIMEOUT, CUSTOMER_CANCELLED, REJECTED_BY_STORE] }
     OrderSummary:
       type: object
       properties:

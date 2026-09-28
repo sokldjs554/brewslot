@@ -33,6 +33,7 @@ class OrderEvents(private val outbox: Outbox) {
             o.promisedPickupAt,
             items(o),
             o.paidAt!!,
+            o.couponAmount.won,
         ),
     )
 
@@ -53,6 +54,7 @@ class OrderEvents(private val outbox: Outbox) {
             o.promisedPickupAt,
             o.readyAt!!,
             o.pickedUpAt!!,
+            o.couponAmount.won,
         ),
     )
 

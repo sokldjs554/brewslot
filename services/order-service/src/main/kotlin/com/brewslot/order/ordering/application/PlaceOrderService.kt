@@ -22,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate
 import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
+import java.util.UUID
 
 data class PlaceOrderCommand(
     val memberId: Long,
@@ -30,11 +31,14 @@ data class PlaceOrderCommand(
     val items: List<CartItem>,
     val pointsToUse: Long,
     val idempotencyKey: String,
+    val couponId: UUID? = null,
+    val couponAmount: Long = 0,
 ) {
     /** 같은 Idempotency-Key 로 "다른" 요청이 오면 거절하기 위한 요청 지문 */
     fun fingerprint(): String {
         val canonical = buildString {
             append(storeId).append('|').append(pickupAt).append('|').append(pointsToUse).append('|')
+            append(couponId).append('|').append(couponAmount).append('|')
             items.sortedBy { it.menuItemId }.forEach { append(it.menuItemId).append('x').append(it.quantity).append(',') }
         }
         return MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray()).joinToString("") { "%02x".format(it) }
@@ -83,6 +87,8 @@ class PlaceOrderService(
                         pointAmount = Money(cmd.pointsToUse),
                         holdExpiresAt = now.plus(props.holdTtl),
                         now = now,
+                        couponId = cmd.couponId,
+                        couponAmount = Money(cmd.couponAmount),
                     )
                     slots.reserve(store, order.id, cmd.pickupAt, demands, now)
                     orders.insert(order, cmd.idempotencyKey, cmd.fingerprint())

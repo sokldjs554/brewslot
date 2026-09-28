@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.PositiveOrZero
 import jakarta.validation.constraints.Size
 import java.time.Instant
+import java.util.UUID
 
 data class OrderItemRequest(
     val menuItemId: Long,
@@ -22,6 +23,9 @@ data class PlaceOrderRequest(
     val pickupAt: Instant,
     @field:NotEmpty @field:Size(max = 30) @field:Valid val items: List<OrderItemRequest>,
     @field:PositiveOrZero val pointsToUse: Long = 0,
+    /** 적용할 쿠폰 (GET /members/{id}/coupons 에서 받은 것). couponAmount 는 그때 본 할인액이며 결제 단계에서 검증된다. */
+    val couponId: UUID? = null,
+    @field:PositiveOrZero val couponAmount: Long = 0,
 )
 
 data class PaymentRequest(
@@ -48,6 +52,8 @@ data class OrderResponse(
     val storeId: Long,
     val promisedPickupAt: Instant,
     val totalAmount: Long,
+    val couponId: String?,
+    val couponAmount: Long,
     val pointAmount: Long,
     val cardAmount: Long,
     val holdExpiresAt: Instant?,
@@ -66,6 +72,8 @@ data class OrderResponse(
             storeId = o.storeId,
             promisedPickupAt = o.promisedPickupAt,
             totalAmount = o.totalAmount.won,
+            couponId = o.couponId?.toString(),
+            couponAmount = o.couponAmount.won,
             pointAmount = o.pointAmount.won,
             cardAmount = o.cardAmount.won,
             holdExpiresAt = o.holdExpiresAt.takeIf { o.status.name == "PENDING_PAYMENT" },

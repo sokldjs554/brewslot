@@ -7,7 +7,8 @@ import java.util.UUID
 /**
  * 결제 Saga 의 진행 상태 (Orchestration 방식).
  *
- * 순서: [포인트 차감] → [카드 결제] → 주문 확정(슬롯 CONFIRMED)
+ * 순서: [혜택 사용: 쿠폰 + 포인트] → [카드 결제] → 주문 확정(슬롯 CONFIRMED)
+ * 쿠폰과 포인트는 모두 loyalty-service 에 있어 한 로컬 트랜잭션으로 함께 쓰거나 함께 거절된다(단계를 나누지 않는다).
  * 포인트를 먼저 차감하는 이유: 포인트 부족은 "흔하고 값싼 실패" 이고 카드 승인 취소는 "드물고 비싼 보상" 이다.
  * 실패 확률이 높고 보상 비용이 낮은 단계를 앞에 두면 PG 취소(망취소) 발생 빈도가 줄어든다.
  */
@@ -23,6 +24,7 @@ class CheckoutSaga(
     val pointAmount: Money,
     val cardAmount: Money,
     val cardToken: String,
+    val couponAmount: Money,
     step: SagaStep,
     status: SagaStatus,
     pointsRedeemed: Boolean,
@@ -39,6 +41,9 @@ class CheckoutSaga(
 
     val isRunning: Boolean get() = status == SagaStatus.RUNNING
 
+    /** loyalty-service 가 처리할 혜택(포인트·쿠폰)이 있는가 */
+    val hasBenefits: Boolean get() = pointAmount.isPositive || couponAmount.isPositive
+
     /** 다음에 해야 할 일. 오케스트레이터는 이 결과대로 명령을 발행한다. */
     sealed interface Next {
         data object RedeemPoints : Next
@@ -49,7 +54,7 @@ class CheckoutSaga(
     }
 
     fun firstStep(): Next = when {
-        pointAmount.isPositive -> Next.RedeemPoints.also { step = SagaStep.REDEEMING_POINTS }
+        hasBenefits -> Next.RedeemPoints.also { step = SagaStep.REDEEMING_POINTS }
         else -> Next.ChargeCard.also { step = SagaStep.CHARGING_PAYMENT }
     }
 
@@ -83,18 +88,26 @@ class CheckoutSaga(
     }
 
     companion object {
-        fun start(orderId: UUID, pointAmount: Money, cardAmount: Money, cardToken: String, now: Instant, deadlineAt: Instant) =
-            CheckoutSaga(
-                orderId,
-                pointAmount,
-                cardAmount,
-                cardToken,
-                SagaStep.REDEEMING_POINTS,
-                SagaStatus.RUNNING,
-                false,
-                now,
-                deadlineAt,
-                0,
-            )
+        fun start(
+            orderId: UUID,
+            pointAmount: Money,
+            cardAmount: Money,
+            cardToken: String,
+            now: Instant,
+            deadlineAt: Instant,
+            couponAmount: Money = Money.ZERO,
+        ) = CheckoutSaga(
+            orderId,
+            pointAmount,
+            cardAmount,
+            cardToken,
+            couponAmount,
+            SagaStep.REDEEMING_POINTS,
+            SagaStatus.RUNNING,
+            false,
+            now,
+            deadlineAt,
+            0,
+        )
     }
 }

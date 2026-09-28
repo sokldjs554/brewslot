@@ -68,7 +68,7 @@ class OrderLifecycleService(
             if (order.cardAmount.isPositive) {
                 outbox.publish(Topics.PAYMENT_COMMANDS, order.id.toString(), RefundPayment(order.id.toString(), reason.name))
             }
-            if (order.pointAmount.isPositive) {
+            if (order.hasBenefits) {
                 outbox.publish(Topics.LOYALTY_COMMANDS, order.id.toString(), ReverseRedemption(order.id.toString(), reason.name))
             }
         }

@@ -9,6 +9,8 @@ enum class EntryKind(val isCard: Boolean) {
     CARD_REFUND(true),
     POINT_SALE(false),
     POINT_REVERSAL(false),
+    COUPON_SALE(false),
+    COUPON_REVERSAL(false),
 }
 
 data class SettlementEntry(
@@ -33,13 +35,15 @@ data class StatementDraft(
     val payout: Long,
     val entryCount: Int,
     val carriedOverCount: Int,
+    val couponSales: Long = 0,
+    val couponReversals: Long = 0,
 )
 
 /**
  * 매장 정산서 계산 규칙 (순수 함수).
  *
- * - 순매출 = 카드매출 + 카드환불(음수) + 포인트매출 + 포인트사용취소(음수)
- *   포인트로 결제된 금액도 매장 매출이다. 포인트 비용은 브랜드가 부담하며 플랫폼이 매장에 먼저 지급한다.
+ * - 순매출 = 카드매출 + 카드환불(음수) + 포인트매출 + 포인트사용취소(음수) + 쿠폰매출 + 쿠폰사용취소(음수)
+ *   포인트·쿠폰으로 결제된 금액도 매장 매출이다. 그 비용은 브랜드가 부담하며 플랫폼이 매장에 먼저 지급한다.
  * - PG 수수료 = 거래 건별로 PG 가 계산한 수수료의 합 (건별 반올림 — PG 정산 파일과 1원 단위로 일치해야 함)
  * - 플랫폼 수수료 = 순매출 × 요율, 원 미만 절사(가맹점 유리)
  * - 지급액 = 순매출 − PG 수수료 − 플랫폼 수수료 (DB CHECK 제약으로도 강제)
@@ -70,6 +74,8 @@ object SettlementCalculator {
             payout = net - pgFee - platformFee,
             entryCount = entries.size,
             carriedOverCount = entries.count { it.businessDate.isBefore(settlementDate) },
+            couponSales = sum(EntryKind.COUPON_SALE),
+            couponReversals = sum(EntryKind.COUPON_REVERSAL),
         )
     }
 }

@@ -13,15 +13,16 @@ class JdbcCheckoutSagaRepository(private val jdbc: JdbcClient) {
     fun insert(saga: CheckoutSaga, now: Instant) {
         jdbc.sql(
             """
-            INSERT INTO checkout_saga (order_id, step, status, point_amount, card_amount, card_token, points_redeemed,
+            INSERT INTO checkout_saga (order_id, step, status, point_amount, coupon_amount, card_amount, card_token, points_redeemed,
                                        started_at, deadline_at, updated_at, version)
-            VALUES (:orderId, :step, :status, :points, :card, :token, :redeemed, :startedAt, :deadlineAt, :now, 0)
+            VALUES (:orderId, :step, :status, :points, :coupon, :card, :token, :redeemed, :startedAt, :deadlineAt, :now, 0)
             """.trimIndent(),
         )
             .param("orderId", saga.orderId)
             .param("step", saga.step.name)
             .param("status", saga.status.name)
             .param("points", saga.pointAmount.won)
+            .param("coupon", saga.couponAmount.won)
             .param("card", saga.cardAmount.won)
             .param("token", saga.cardToken)
             .param("redeemed", saga.pointsRedeemed)
@@ -51,7 +52,7 @@ class JdbcCheckoutSagaRepository(private val jdbc: JdbcClient) {
 
     fun find(orderId: UUID): CheckoutSaga? = jdbc.sql(
         """
-        SELECT order_id, step, status, point_amount, card_amount, card_token, points_redeemed, started_at, deadline_at, version
+        SELECT order_id, step, status, point_amount, coupon_amount, card_amount, card_token, points_redeemed, started_at, deadline_at, version
         FROM checkout_saga WHERE order_id = :orderId
         """.trimIndent(),
     ).param("orderId", orderId).query { rs, _ ->
@@ -60,6 +61,7 @@ class JdbcCheckoutSagaRepository(private val jdbc: JdbcClient) {
             pointAmount = Money(rs.getLong("point_amount")),
             cardAmount = Money(rs.getLong("card_amount")),
             cardToken = rs.getString("card_token"),
+            couponAmount = Money(rs.getLong("coupon_amount")),
             step = SagaStep.valueOf(rs.getString("step")),
             status = SagaStatus.valueOf(rs.getString("status")),
             pointsRedeemed = rs.getBoolean("points_redeemed"),

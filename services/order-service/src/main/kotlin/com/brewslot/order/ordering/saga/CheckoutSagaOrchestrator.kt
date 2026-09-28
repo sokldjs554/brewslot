@@ -64,7 +64,15 @@ class CheckoutSagaOrchestrator(
         }
 
         order.startCheckout(now)
-        val saga = CheckoutSaga.start(order.id, order.pointAmount, order.cardAmount, cardToken, now, now.plus(props.sagaTimeout))
+        val saga = CheckoutSaga.start(
+            order.id,
+            order.pointAmount,
+            order.cardAmount,
+            cardToken,
+            now,
+            now.plus(props.sagaTimeout),
+            order.couponAmount,
+        )
         when (saga.firstStep()) {
             CheckoutSaga.Next.RedeemPoints -> sendRedeem(order)
             CheckoutSaga.Next.ChargeCard -> sendCharge(order, saga)
@@ -85,8 +93,8 @@ class CheckoutSagaOrchestrator(
     }
 
     @Transactional
-    fun onPointsRedemptionFailed(orderId: UUID) = withRunningSaga(orderId, "PointsRedemptionFailed") { order, saga ->
-        cancel(order, CancelReason.POINTS_INSUFFICIENT)
+    fun onPointsRedemptionFailed(orderId: UUID, reason: String = "INSUFFICIENT_BALANCE") = withRunningSaga(orderId, "PointsRedemptionFailed") { order, saga ->
+        cancel(order, if (reason.startsWith("COUPON_")) CancelReason.COUPON_REJECTED else CancelReason.POINTS_INSUFFICIENT)
         saga.compensated()
     }
 
@@ -132,7 +140,7 @@ class CheckoutSagaOrchestrator(
         if (saga.cardAmount.isPositive && saga.step == SagaStep.CHARGING_PAYMENT) {
             outbox.publish(Topics.PAYMENT_COMMANDS, order.id.toString(), RefundPayment(order.id.toString(), "SAGA_TIMEOUT"))
         }
-        if (saga.pointAmount.isPositive) {
+        if (saga.hasBenefits) {
             outbox.publish(Topics.LOYALTY_COMMANDS, order.id.toString(), ReverseRedemption(order.id.toString(), "SAGA_TIMEOUT"))
         }
         saga.timedOut()
@@ -179,7 +187,16 @@ class CheckoutSagaOrchestrator(
     private fun sendRedeem(order: Order) = outbox.publish(
         Topics.LOYALTY_COMMANDS,
         order.id.toString(),
-        RedeemPoints(order.id.toString(), order.memberId, order.brandId, order.storeId, order.pointAmount.won),
+        RedeemPoints(
+            order.id.toString(),
+            order.memberId,
+            order.brandId,
+            order.storeId,
+            order.pointAmount.won,
+            order.couponId?.toString(),
+            order.couponAmount.won,
+            order.totalAmount.won,
+        ),
     )
 
     private fun sendCharge(order: Order, saga: CheckoutSaga) = outbox.publish(

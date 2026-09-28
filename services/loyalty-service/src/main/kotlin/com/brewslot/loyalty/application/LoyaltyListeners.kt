@@ -25,7 +25,16 @@ class LoyaltyListeners(
         when (envelope.eventType) {
             RedeemPoints::class.simpleName -> codec.payloadOf<RedeemPoints>(envelope).let { c ->
                 inbox.process(CONSUMER_COMMANDS, envelope) {
-                    points.redeem(UUID.fromString(c.orderId), c.memberId, c.brandId, c.storeId, c.amount)
+                    points.redeem(
+                        UUID.fromString(c.orderId),
+                        c.memberId,
+                        c.brandId,
+                        c.storeId,
+                        c.amount,
+                        c.couponId?.let(UUID::fromString),
+                        c.couponAmount,
+                        c.orderTotal,
+                    )
                 }
             }
             ReverseRedemption::class.simpleName -> codec.payloadOf<ReverseRedemption>(envelope).let { c ->

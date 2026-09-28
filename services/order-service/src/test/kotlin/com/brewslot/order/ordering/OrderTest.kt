@@ -18,7 +18,7 @@ import java.util.UUID
 class OrderTest {
     private val now = Instant.parse("2026-09-28T00:00:00Z")
 
-    private fun order(points: Long = 0) = Order.place(
+    private fun order(points: Long = 0, coupon: Long = 0) = Order.place(
         id = UUID.randomUUID(),
         memberId = 1,
         storeId = 101,
@@ -31,6 +31,8 @@ class OrderTest {
         pointAmount = Money(points),
         holdExpiresAt = now.plusSeconds(300),
         now = now,
+        couponId = if (coupon > 0) UUID.randomUUID() else null,
+        couponAmount = Money(coupon),
     )
 
     @Test
@@ -43,6 +45,21 @@ class OrderTest {
     @Test
     fun `포인트는 총액을 넘을 수 없다`() {
         assertThatThrownBy { order(points = 15_001) }.isInstanceOf(IllegalArgumentException::class.java)
+    }
+
+    @Test
+    fun `쿠폰 할인 후 포인트, 나머지를 카드로 - 포인트는 할인 후 금액을 넘을 수 없다`() {
+        val o = order(points = 3000, coupon = 1000)
+        assertThat(o.cardAmount).isEqualTo(Money(11_000))
+        assertThat(o.hasBenefits).isTrue()
+        assertThatThrownBy { order(points = 14_001, coupon = 1000) }.isInstanceOf(IllegalArgumentException::class.java)
+    }
+
+    @Test
+    fun `Saga - 쿠폰만 있어도 혜택 사용 단계를 먼저 거친다`() {
+        val saga = CheckoutSaga.start(UUID.randomUUID(), Money(0), Money(14_000), "tok", now, now.plusSeconds(120), Money(1000))
+        assertThat(saga.firstStep()).isEqualTo(CheckoutSaga.Next.RedeemPoints)
+        assertThat(saga.onPointsRedeemed()).isEqualTo(CheckoutSaga.Next.ChargeCard)
     }
 
     @Test

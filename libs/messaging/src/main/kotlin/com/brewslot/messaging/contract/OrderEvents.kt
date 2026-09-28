@@ -38,6 +38,7 @@ data class OrderPaid(
     val promisedPickupAt: Instant,
     val items: List<OrderedItem>,
     val paidAt: Instant,
+    val couponAmount: Long = 0,
 )
 
 data class OrderPreparing(
@@ -65,6 +66,7 @@ data class OrderPickedUp(
     val promisedPickupAt: Instant,
     val readyAt: Instant,
     val pickedUpAt: Instant,
+    val couponAmount: Long = 0,
 )
 
 data class OrderCancelled(

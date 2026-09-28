@@ -38,14 +38,32 @@ class SettlementIngestor(
             PaymentRefunded::class.simpleName -> codec.payloadOf<PaymentRefunded>(envelope).let {
                 insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.CARD_REFUND, -it.amount, it.pgTransactionId, it.refundedAt)
             }
+            // 한 이벤트에 포인트와 쿠폰이 함께 담겨 온다. 원천 행은 수단별로 나누고, 쿠폰 행의 멱등 키는 이벤트 ID 에서 결정적으로 유도한다.
             PointsRedeemed::class.simpleName -> codec.payloadOf<PointsRedeemed>(envelope).let {
-                insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.POINT_SALE, it.amount, null, it.redeemedAt)
+                if (it.amount > 0) insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.POINT_SALE, it.amount, null, it.redeemedAt)
+                if (it.couponAmount > 0) {
+                    insert(couponKey(envelope.eventId), it.storeId, it.brandId, it.orderId, EntryKind.COUPON_SALE, it.couponAmount, null, it.redeemedAt)
+                }
             }
             PointsRedemptionReversed::class.simpleName -> codec.payloadOf<PointsRedemptionReversed>(envelope).let {
-                insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.POINT_REVERSAL, -it.amount, null, it.reversedAt)
+                if (it.amount > 0) insert(envelope.eventId, it.storeId, it.brandId, it.orderId, EntryKind.POINT_REVERSAL, -it.amount, null, it.reversedAt)
+                if (it.couponAmount > 0) {
+                    insert(
+                        couponKey(envelope.eventId),
+                        it.storeId,
+                        it.brandId,
+                        it.orderId,
+                        EntryKind.COUPON_REVERSAL,
+                        -it.couponAmount,
+                        null,
+                        it.reversedAt,
+                    )
+                }
             }
         }
     }
+
+    private fun couponKey(eventId: UUID): UUID = UUID.nameUUIDFromBytes("$eventId:coupon".toByteArray())
 
     private fun insert(eventId: UUID, storeId: Long, brandId: Long, orderId: String, kind: EntryKind, amount: Long, pgTxId: String?, at: Instant) {
         val fee = if (kind.isCard) SettlementCalculator.cardFee(amount, props.pgFeeBps) else 0

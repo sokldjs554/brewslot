@@ -9,6 +9,7 @@ package com.brewslot.loyalty.domain
  * | brand:{b}:funding           | 비용 | 브랜드가 적립해 준 포인트 비용                   |
  * | store:{s}:clearing          | 채권 | 포인트로 결제된 매출 → 정산 때 매장에 지급         |
  * | brand:{b}:breakage          | 수익 | 소멸된 포인트 (브랜드 부채 소멸)                  |
+ * | brand:{b}:promotion         | 비용 | 쿠폰 할인액 (브랜드 부담, 매장은 정가로 정산)       |
  */
 object Accounts {
     fun memberWallet(memberId: Long, brandId: Long) = "member:$memberId:brand:$brandId"
@@ -18,6 +19,8 @@ object Accounts {
     fun storeClearing(storeId: Long) = "store:$storeId:clearing"
 
     fun brandBreakage(brandId: Long) = "brand:$brandId:breakage"
+
+    fun brandPromotion(brandId: Long) = "brand:$brandId:promotion"
 }
 
 enum class Direction { D, C }
@@ -43,4 +46,4 @@ class Posting private constructor(val entries: List<Entry>) {
     }
 }
 
-enum class TxType { EARN, GRANT, REDEEM, REVERSE_REDEEM, EXPIRE }
+enum class TxType { EARN, GRANT, REDEEM, REVERSE_REDEEM, EXPIRE, COUPON_REDEEM, REVERSE_COUPON }

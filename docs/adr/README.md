@@ -11,3 +11,4 @@
 | [0007](0007-settlement-and-reconciliation.md) | 정산은 "돈이 움직인 사실" 이벤트만 적재, 늦은 이벤트는 **이월**, PG 파일과 **건별 대사** | 채택 |
 | [0008](0008-explicit-sql-over-jpa.md) | JPA 대신 **JdbcClient + 명시적 SQL**, 도메인 모델은 프레임워크 무의존 | 채택 |
 | [0009](0009-monorepo-multiservice.md) | 모노레포 멀티 서비스 + **한 JVM 에서 4개 서비스를 띄우는 E2E** | 채택 |
+| [0010](0010-coupon-promotion.md) | 쿠폰 이벤트: **선착순은 조건부 UPDATE**, 쿠폰은 포인트와 **한 로컬 트랜잭션**, 할인액은 **고객이 본 금액을 결제 때 검증** | 채택 |

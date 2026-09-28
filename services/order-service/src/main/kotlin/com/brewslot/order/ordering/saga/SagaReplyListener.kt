@@ -26,7 +26,7 @@ class SagaReplyListener(
                 { orchestrator.onPointsRedeemed(orderId(codec.payloadOf<PointsRedeemed>(envelope).orderId)) }
             }
             PointsRedemptionFailed::class.simpleName -> {
-                { orchestrator.onPointsRedemptionFailed(orderId(codec.payloadOf<PointsRedemptionFailed>(envelope).orderId)) }
+                codec.payloadOf<PointsRedemptionFailed>(envelope).let { e -> { orchestrator.onPointsRedemptionFailed(orderId(e.orderId), e.reason) } }
             }
             PaymentCaptured::class.simpleName -> {
                 { orchestrator.onPaymentCaptured(orderId(codec.payloadOf<PaymentCaptured>(envelope).orderId)) }
