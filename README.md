@@ -9,7 +9,9 @@
 ### ▶ 라이브 데모 — https://sokldjs554.github.io/brewslot/
 
 설치 없이 브라우저에서 바로 동작하는 **고객 앱 + 매장 화면** 데모입니다. 같은 매장 시계 위에서 가상의 손님들이 계속 주문을 넣습니다.
-- **고객 앱** — 메뉴 담기 → 받을 시각 고르기(마감·혼잡 표시) → 3분간 제조 자리 확보 후 결제(포인트 · 카드, 승인 거절 시 포인트 자동 복원) → 주문 추적 → 픽업 · 적립 · 재주문, 제조 시작 전 취소
+- **고객 앱** — 메뉴 담기 → 받을 시각 고르기(마감·혼잡 표시) → 5분간 제조 자리 확보 후 결제(쿠폰 · 포인트 · 카드) → 주문 추적(픽업 약속 시각, 주문 기록) → 픽업 · 적립 · 재주문, 제조 시작 전 취소
+- **결제 장애 체험** — 잔액 부족 카드(쿠폰·포인트 자동 복원), 응답이 늦는 카드(실패로 단정하지 않고 결과 재조회 후 확정), 확인 중 다시 결제 눌러도 한 번만 결제
+- **쿠폰 이벤트** — 선착순 쿠폰 받기(다른 손님도 받아 가며 소진), 결제 적용, 매출·정산에 브랜드 부담 할인으로 반영
 - **매장 화면** — 스테이션별 제조 큐와 픽업대, 시간대별 제조 용량 조절 · 주문 접수 중지, 메뉴 품절 처리, 매출 · 수수료 · 정산 예정액
 
 데모의 스케줄러는 서버 Kotlin 코드를 옮긴 것이며, **서버가 만든 무작위 시나리오 500개에서 결과가 모두 같음을 CI 가 매번 검증**합니다 (`site/verify.mjs`).
@@ -35,9 +37,11 @@
 | **동시성** | 100명 동시 주문 → 정확히 이론값(3건)만 수락, **초과 예약 0** · 거절 97건 전부 대안 시각 포함 |
 | **분산 트랜잭션** | Orchestration Saga (포인트 → 카드), Transactional Outbox, Idempotent Inbox, PG 결과 불명 복구 |
 | **돈** | 복식부기 포인트 원장(DB 트리거로 차/대 균형 강제), 영업일 이월 정산, PG 파일 건별 대사 |
+| **이벤트(쿠폰)** | 선착순 50명 동시 요청 → **정확히 10장**, 쿠폰+포인트를 한 트랜잭션으로 사용·보상, 할인액 조작은 결제 단계에서 거절 |
 | **성능** | 부하 300 req/s에서 주문 p95 **34ms**, Saga p95 **13.7s → 0.46s** (Kafka 소비 병목 발견·수정) |
 | **쿼리 튜닝** | 5개 핫 쿼리 before/after 실측 — Outbox 폴링 **140.9ms → 0.08ms**, 정산 마감 **161ms → 4.3ms** |
-| **품질** | 테스트 **79개** (단위·Testcontainers 통합·**실행계획 회귀**·**API 드리프트**·**4서비스 E2E**·Python) |
+| **품질** | 테스트 **97개** (단위·Testcontainers 통합·**실행계획 회귀**·**API 드리프트**·**4서비스 E2E**·Python) |
+| **모니터링** | Datadog 대시보드·모니터 6종을 코드로 관리, 참조 지표가 코드에 있는지 CI 가 검사 |
 | **AI-Driven** | Claude Code 로 PRD→설계→구현→검증→문서 전 과정 수행. 커맨드·서브에이전트·훅·PR 리뷰 자동화 포함 |
 
 <br>
@@ -48,7 +52,7 @@
 
 | 흔한 접근 | 이 프로젝트 |
 |---|---|
-| 재고 차감·선착순 쿠폰으로 동시성 보여주기 | 커피는 재고가 아니라 **바리스타의 시간**이 병목이다 → 시간 슬롯 × 스테이션 부하 원장 |
+| 재고 차감·선착순 쿠폰**만으로** 동시성 보여주기 | 커피는 재고가 아니라 **바리스타의 시간**이 병목이다 → 시간 슬롯 × 스테이션 부하 원장 |
 | 시간대별 **주문 건수** 제한 (5분당 5건) | 아메리카노 1잔과 스무디 5잔은 다르다 → **메뉴별 부하(load unit)**, **스테이션별 용량** |
 | 픽업 시간 = 대기열 순서로 계산된 "예상 시간" | 고객이 시각을 **고르고**, 시스템은 **지킬 수 있을 때만** 받는다. 못 지키면 가장 가까운 대안 3개 |
 | 결제 성공/실패 두 가지 경로만 | PG **타임아웃(결과 불명)** → 복구 조회 → 늦은 승인 자동 취소까지 |
@@ -161,6 +165,12 @@ sequenceDiagram
 - `order.events` 를 Kafka 로 투영해 회원 주문내역(keyset 페이지네이션), 매장 대시보드(**픽업 약속 준수율**, 평균 지연)를 만든다.
 - 재주문 추천은 지난 장바구니를 **현재 가격·품절·지금 가능한 가장 빠른 픽업 시각**으로 재검증해 보여준다.
 
+### 8. 쿠폰 이벤트 — [ADR-0010](docs/adr/0010-coupon-promotion.md)
+- 선착순 발급은 "쿠폰 행 INSERT(회원당 1장) → 캠페인 재고 **조건부 UPDATE**(`issued_count < issue_limit`)" 를 한 트랜잭션으로. 재고가 없으면 쿠폰 행도 롤백.
+- 쿠폰과 포인트는 둘 다 loyalty DB 에 있으므로 Saga 단계를 늘리지 않고 **한 로컬 트랜잭션**으로 쓰고, 보상도 함께 되돌린다(결제 중 만료된 쿠폰은 되살리지 않음).
+- 할인액은 주문 시 **고객이 본 금액**을 기록하고 결제 단계에서 loyalty-service 가 검증 — 주문 경로에 서비스 간 동기 호출이 없다.
+- 할인 비용은 브랜드 부담(차: 브랜드 프로모션 비용 / 대: 매장 정산 채권). 매장은 정가 기준으로 정산받고 정산서에 `couponSales` 가 따로 보인다.
+
 <br>
 
 ## 실패 시나리오 (전부 테스트로 고정)
@@ -170,6 +180,10 @@ sequenceDiagram
 | 같은 시각에 40/100명 동시 주문 | 이론값만 수락, 초과 예약 0, 거절 전원 대안 시각 | 통합 테스트, k6 |
 | 같은 Idempotency-Key 재요청 / 다른 내용 | 같은 주문 200 / 422 | 통합 테스트 |
 | 결제 안 하고 이탈 | 5분 후 점유 해제, 용량 반환 | 통합 테스트 |
+| 선착순 10장 쿠폰에 50명 동시 요청 | 정확히 10장 발급, 실패 요청의 쿠폰 행 0건 | Coupon IT |
+| 같은 쿠폰으로 두 주문 동시 결제 | 한 주문만 사용, 다른 주문은 거절 | Coupon IT |
+| 쿠폰 할인액을 부풀린 주문 | 결제 단계에서 거절 → `COUPON_REJECTED` 취소, 쿠폰·포인트 그대로 | Coupon IT, **E2E** |
+| 쿠폰 + 포인트 + 카드 중 카드 거절 | 쿠폰·포인트 함께 복원, 쿠폰은 다시 사용 가능 | Coupon IT, **E2E** |
 | 포인트 부족 | 카드 결제 시도 없이 취소 | Saga IT |
 | 카드 거절 | 차감한 포인트 자동 복원 | Saga IT, **E2E** |
 | PG 응답 유실 → Saga 타임아웃 → 늦은 승인 | 주문 취소, 늦은 승인 자동 취소, 포인트 복원 | Payment IT, **E2E** |
@@ -216,16 +230,17 @@ sequenceDiagram
 
 | 층 | 무엇을 | 개수 |
 |---|---|---:|
-| 도메인 단위 | 스케줄러 규칙, 주문 상태기계, Saga 단계, lot 배분, 정산 계산, 대사, Money · UUIDv7 | 31 |
-| 통합 (Testcontainers: PostgreSQL · Kafka · Redis) | 동시 주문, 멱등성, Saga 보상, PG 타임아웃 복구, 원장 불변식, 이월 정산 | 25 |
+| 도메인 단위 | 스케줄러 규칙, 주문 상태기계, Saga 단계, lot 배분, 쿠폰 규칙, 정산 계산, 대사, Money · UUIDv7 | 39 |
+| 통합 (Testcontainers: PostgreSQL · Kafka · Redis) | 동시 주문, 멱등성, Saga 보상, PG 타임아웃 복구, 원장 불변식, 선착순 쿠폰 동시성, 이월 정산 | 32 |
 | 실행계획 회귀 | 운영 규모 데이터에서 인덱스·Sort·Seq Scan 단언 | 4 |
 | API 드리프트 | 설계 명세(`docs/api`) ↔ 구현(springdoc) 경로·메서드·필수 헤더 | 2 |
 | 아키텍처 | 도메인 계층의 프레임워크 무의존 (ArchUnit) | 3 |
-| **E2E** | 4개 서비스를 한 JVM 에서 실제 Kafka 로 연결: 복합결제→픽업→적립→정산→대사, 거절, 타임아웃, 재주문 | 5 |
+| **E2E** | 4개 서비스를 한 JVM 에서 실제 Kafka 로 연결: 복합결제→픽업→적립→정산→대사, 거절, 타임아웃, 쿠폰 사용·보상·조작 거절, 재주문 | 7 |
+| 데모 교차검증 | 서버 스케줄러로 무작위 시나리오 500개를 만들어 공개 데모 스크립트와 결과 비교 | 1 |
 | plan-doctor (Python) | 진단 규칙, CI 게이트, Claude 요청 형태 | 9 |
 
 ```bash
-./gradlew build     # Docker 필요. ktlint + 70개 JVM 테스트
+./gradlew build     # Docker 필요. ktlint + 88개 JVM 테스트
 ```
 
 <br>
@@ -311,9 +326,12 @@ curl -XPOST localhost:8084/reconciliation-runs -H 'Content-Type: application/jso
 | Test | JUnit 5, AssertJ, Testcontainers, Awaitility, ArchUnit, k6, pytest |
 | DevEx | Gradle 멀티모듈, ktlint, GitHub Actions, Docker Compose, **Claude Code** |
 
-### 관측 지표 (Datadog 전송 가능: `DATADOG_ENABLED=true DD_API_KEY=...`)
-`brewslot.pickup.promise.lateness`(약속 대비 지연 분포) · `brewslot.slot.rejections`(스테이션별 용량 거절) · `brewslot.slot.cache`(hit/rebuild/fallback)
-· `brewslot.slot.reservation.race_retries` · `brewslot.outbox.lag` · `brewslot.payment.result`
+### 관측 지표 · Datadog — [infra/datadog](infra/datadog)
+`DATADOG_ENABLED=true DD_API_KEY=...` 로 전송. 대시보드와 모니터 6종(Saga p95, Saga 타임아웃, Outbox 적체, DLT, 픽업 약속 지연, Redis 폴백)을 JSON 으로 관리하고,
+참조하는 지표가 코드에 실제로 있는지 CI 가 검사한다(`check_metrics.py`).
+
+`brewslot.checkout.saga.duration`(결제 시작→확정, outcome 별) · `brewslot.pickup.promise.lateness`(약속 대비 지연 분포) · `brewslot.outbox.pending`(미발행 적체)
+· `brewslot.outbox.lag` · `brewslot.kafka.dlt` · `brewslot.slot.rejections`(스테이션별 용량 거절) · `brewslot.slot.cache`(hit/rebuild/fallback) · `brewslot.slot.reservation.race_retries` · `brewslot.payment.result` · `brewslot.coupon.claims`
 
 <br>
 
@@ -329,7 +347,7 @@ brewslot
 ├── services
 │   ├── order-service       catalog / scheduling / ordering(+saga) / query(CQRS)
 │   ├── payment-service     결제 + Fake PG(승인·거절·타임아웃·정산 파일)
-│   ├── loyalty-service     복식부기 포인트 원장
+│   ├── loyalty-service     복식부기 포인트 원장 · 쿠폰 이벤트
 │   └── settlement-service  정산 마감 · PG 대사
 ├── e2e                 4개 서비스 한 JVM E2E
 ├── tools/plan-doctor   실행계획 진단 (Python, Claude API)

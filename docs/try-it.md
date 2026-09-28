@@ -53,5 +53,5 @@
 
 ```bash
 ./scripts/stop-all.sh                      # 데모용 인프라를 내리고
-./gradlew build                            # 70개 테스트 (Testcontainers 로 DB·Kafka·Redis 를 직접 띄움, 약 5분)
+./gradlew build                            # 88개 JVM 테스트 (Testcontainers 로 DB·Kafka·Redis 를 직접 띄움, 약 5분)
 ```

@@ -15,6 +15,14 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 커밋된 DB 마이그레이션이 수정되지 않았는지 검사
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]]; then BASE=HEAD~1; fi
+          scripts/check-migrations.sh "$BASE"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
