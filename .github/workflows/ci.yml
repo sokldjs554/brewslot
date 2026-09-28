@@ -40,6 +40,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: dlt-console (FastAPI) — 단위 + 실제 Kafka 통합 테스트
+        working-directory: services/dlt-console
+        run: |
+          pip install -q -e '.[dev]'
+          pytest -q
       - name: plan-doctor (실행계획 진단 · high 발견 시 실패)
         working-directory: tools/plan-doctor
         run: |

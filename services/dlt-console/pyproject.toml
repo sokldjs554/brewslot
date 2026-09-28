@@ -1,0 +1,26 @@
+[project]
+name = "dlt-console"
+version = "0.1.0"
+description = "BrewSlot 운영 도구: Kafka DLT 로 격리된 메시지를 조회하고 원래 토픽으로 안전하게 재처리한다"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.115.12",
+  "uvicorn[standard]==0.34.2",
+  "aiokafka==0.12.0",
+  "prometheus-client==0.21.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.3.5", "pytest-asyncio==0.26.0", "httpx==0.28.1", "testcontainers[kafka]==4.10.0"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["integration: 실제 Kafka(Testcontainers)가 필요한 테스트"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["dlt_console"]

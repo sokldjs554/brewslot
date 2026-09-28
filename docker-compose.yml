@@ -86,6 +86,15 @@ services:
       kafka: { condition: service_healthy }
     ports: ["8085:8085"]
 
+  dlt-console:
+    build: { context: services/dlt-console }
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      OPS_TOKEN: ${OPS_TOKEN:-local-ops-token}
+    depends_on:
+      kafka: { condition: service_healthy }
+    ports: ["8090:8090"]
+
   prometheus:
     image: prom/prometheus:v3.5.0
     profiles: ["observability"]
