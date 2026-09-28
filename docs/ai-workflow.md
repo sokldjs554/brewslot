@@ -11,7 +11,7 @@ AI 를 "코드 자동완성" 이 아니라 **설계 파트너 + 구현자 + 리�
 | 문제 정의 | 경쟁 프로젝트 조사 결과로 "흔한 주제(재고 차감·선착순 쿠폰) 대신 **픽업 약속**" 을 핵심 문제로 결정 | 유사 오픈소스(시간대별 주문 건수 제한, FIFO 큐)의 한계를 정리 | `docs/prd/pickup-promise.md` |
 | 설계 | 트레이드오프 최종 결정 | 이벤트 스토밍, 불변식, 실패 시나리오 표, API 초안 | `docs/adr/*`, `docs/api/order-service.yaml`, `/prd-to-design` |
 | 구현 | 경계·규칙 정의(CLAUDE.md) | 모듈 단위 구현, 테스트 동시 작성 | `CLAUDE.md`, 훅 |
-| 검증 | 실패 원인 판단 | 테스트 실행 → 실패 분석 → 수정 루프 | JVM 108개 + Python 19개 테스트, n8n · K8s 배포 검증, CI |
+| 검증 | 실패 원인 판단 | 테스트 실행 → 실패 분석 → 수정 루프 | JVM 113개 + Python 19개 테스트, n8n · K8s 배포 검증, CI |
 | 성능 | 측정 설계, 결과 해석 | 부하 스크립트·쿼리 실험 작성, 구간별 지연 분해 | `docs/performance/*`, `scripts/query-lab`, `load-test/` |
 | 리뷰 | 최종 승인 | 규칙 기반 셀프 리뷰, PR 리뷰 자동화 | `/review`, `claude-review.yml`, 서브에이전트 |
 
