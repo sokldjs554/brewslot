@@ -46,7 +46,10 @@ class OrderToSettlementE2ETest {
 
     private fun pickupSoon(minutes: Long): Instant {
         val t = Instant.now().plus(Duration.ofMinutes(minutes))
-        return Instant.ofEpochSecond((t.epochSecond / 300 + 1) * 300)
+        val slot = Instant.ofEpochSecond((t.epochSecond / 300 + 1) * 300)
+        // 매장 영업시간(00:05~23:59 KST) 경계를 넘는 시각이면 영업 시작 이후로 민다 (실제 시계를 쓰는 E2E 가 자정 무렵 실패하지 않도록)
+        val kst = slot.atZone(BusinessTime.ZONE).toLocalTime()
+        return if (kst.isAfter(java.time.LocalTime.of(23, 55)) || kst.isBefore(java.time.LocalTime.of(0, 10))) slot.plus(Duration.ofMinutes(20)) else slot
     }
 
     private fun grant(memberId: Long, amount: Long) = loyalty.post().uri("/admin/point-grants").contentType(MediaType.APPLICATION_JSON)
