@@ -64,6 +64,25 @@ button:disabled { cursor: not-allowed; }
 .devpanel li .t { color: #a79e95; margin-right: 6px; }
 .devpanel li code { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; background: #3b2f25; color: #f2c9a0; font-size: 11.5px; }
 .devpanel .empty2 { padding: 14px; color: #bdb4aa; line-height: 1.6; }
+.devpanel { width: min(560px, calc(100vw - 32px)); max-height: 60vh; }
+.devpanel .dbody { overflow: auto; }
+.devpanel .dtabs { display: flex; gap: 2px; background: #2a2521; border-radius: 8px; padding: 2px; flex: 1; }
+.devpanel .dtabs button { flex: 1; background: none; border: 0; color: #bdb4aa; padding: 4px 6px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.devpanel .dtabs button[aria-pressed="true"] { background: #4a3b2e; color: #fff; }
+.devpanel .meta { color: #a79e95; font-size: 11.5px; margin-top: 2px; }
+.devpanel .meta a, .devpanel .dev-note a { color: #f2c9a0; }
+.devpanel .topic { color: #9fd3b0; }
+.devpanel pre { margin: 4px 0 0; padding: 6px 8px; background: #25201c; border-radius: 6px; white-space: pre-wrap; word-break: break-all; font-size: 11px; color: #d9d1c8; }
+.devpanel .st { font-weight: 700; padding: 0 5px; border-radius: 5px; } .devpanel .s2 { background: #264a33; color: #b9f0c9; } .devpanel .s4 { background: #5a2a24; color: #ffc9bf; }
+.devpanel .m-GET { color: #9fc7ff; } .devpanel .m-POST { color: #ffd59f; }
+.devpanel .dev-note { padding: 10px 14px 4px; color: #cfc6bc; line-height: 1.55; }
+.devpanel .dev-h { padding: 10px 14px 2px; font-weight: 700; color: #efe9e2; }
+.devpanel .dev-tbl { width: calc(100% - 28px); margin: 4px 14px 6px; border-collapse: collapse; font-size: 11.5px; }
+.devpanel .dev-tbl th, .devpanel .dev-tbl td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #3a342e; }
+.devpanel .dev-tbl .r { text-align: right; }
+.devpanel .dev-tbl th { background: #2a2521; color: #cfc6bc; font-weight: 600; position: static; }
+.devpanel .dev-tbl td { background: transparent; color: #efe9e2; }
+.devpanel .dev-tbl code { background: none; color: #f2c9a0; padding: 0; }
 .switch-view { display: none; }
 
 /* ── layout ── */
@@ -385,7 +404,7 @@ footer a { color: inherit; }
       issued: 6, coupon: null, useCoupon: true,
       cart: [], pickSel: null, route: 'menu', cat: 'all', viewOrder: null, conflict: null, payCard: 'ok', usePoints: true, payOrder: null, payMsg: null, toast: null,
       storeTab: 'kds',
-      xferOpen: null, xferPick: null, nearReply: 'auto', xferSeq: 0, showCodes: false,
+      xferOpen: null, xferPick: null, nearReply: 'auto', xferSeq: 0, showCodes: false, devTab: 'events', api: [],
     };
   }
 
@@ -456,6 +475,10 @@ footer a { color: inherit; }
   const firstSlot = (o) => Math.min(...o.tickets.map((t) => t.slot));
   function addLog(msg) { st.log.unshift({ t: st.now, msg }); if (st.log.length > 80) st.log.pop(); }
   function ev(o, code, text) { o.events.push({ t: st.now, code, text }); }
+  /** 고객 앱이 서버에 보내는 요청 기록 (개발자 보기 · API 탭). 경로 · 헤더 · 상태 코드는 docs/api/order-service.yaml 과 같다 */
+  function api(method, path, status, req, res, note) { st.api.unshift({ t: st.now, method, path, status, req, res, note }); if (st.api.length > 60) st.api.pop(); }
+  const oid = (o) => `ord-${o.no}`;
+  const key = () => 'app-' + Math.random().toString(36).slice(2, 10);
   const remaining = () => CAMPAIGN.limit - st.issued;
 
   // ───────────────────────── 매장에 오는 다른 손님들 ─────────────────────────
@@ -540,12 +563,15 @@ footer a { color: inherit; }
   function placeMine(store = 'main') {
     if (!st.pickSel) return;
     const r = tryPlace(st.cart, st.pickSel, true, store);
+    const body = { storeId: store === 'main' ? 101 : 104, pickupAt: hhmm(st.pickSel), items: st.cart.map((l) => ({ menuItemId: l.menuId, quantity: l.qty })) };
     if (!r.ok) {
       // 원하는 시각이 꽉 찼으면 같은 브랜드 근처 매장이 "그 시각 그대로" 되는지도 함께 본다 (서버 409 nearbyStores)
       const nearOk = store === 'main' && plan('near', st.cart, st.pickSel).ok;
+      api('POST', '/orders', 409, { 'Idempotency-Key': key(), ...body }, { type: 'pickup-slot-unavailable', reason: r.reason, alternatives: r.alts.map(hhmm), nearbyStores: nearOk ? [{ storeName: '서울숲점', pickupAt: hhmm(st.pickSel), walkMinutes: STORES.near.walkMin }] : [] }, '용량 부족 → 가장 가까운 시각 3개 + 같은 시각 가능한 근처 매장');
       st.conflict = { pickup: st.pickSel, reason: r.reason, alts: r.alts, near: nearOk ? st.pickSel : null };
       st.pickSel = null; return;
     }
+    api('POST', '/orders', 201, { 'Idempotency-Key': key(), ...body }, { orderId: oid(r.order), status: 'PENDING_PAYMENT', holdExpiresAt: hhmm(r.order.holdUntil) }, '제조 슬롯 임시 점유(5분) · 슬롯 행을 스테이션·시각 순으로 잠금');
     st.conflict = null; st.payOrder = r.order.id; st.payMsg = null; st.route = 'pay';
   }
   /** 결제 화면에서 적용될 금액: 쿠폰 → 포인트 → 나머지 카드 (서버 Order.cardAmount 와 같은 순서) */
@@ -561,6 +587,7 @@ footer a { color: inherit; }
     st.issued++;
     st.coupon = { id: 'CP' + st.issued, discount: CAMPAIGN.discount, min: CAMPAIGN.min, status: 'ISSUED', orderNo: null };
     addLog(`앱 회원 쿠폰 발급 (${st.issued}/${CAMPAIGN.limit})`);
+    api('POST', '/promotions/{campaignId}/claims', 201, { 'X-Member-Id': 1 }, { couponId: st.coupon.id, status: 'ISSUED', issued: `${st.issued}/${CAMPAIGN.limit}` }, '회원당 1장 INSERT → 재고 조건부 UPDATE(issued_count < limit) 한 트랜잭션');
   }
   function restoreBenefits(o, why) {
     if (o.pay.points) { st.points += o.pay.points; st.pointLog.unshift({ t: st.now, amt: o.pay.points, memo: `#${o.no} ${why}` }); }
@@ -569,6 +596,7 @@ footer a { color: inherit; }
   function payMine() {
     const o = st.orders.find((x) => x.id === st.payOrder); if (!o || o.status !== 'HELD') return;
     const a = amountsFor(o);
+    api('POST', `/orders/${oid(o)}/payment`, 202, { cardToken: 'tok_' + st.payCard }, { status: 'PAYMENT_IN_PROGRESS' }, `Saga 시작: ${a.points || a.coupon ? 'RedeemPoints → ' : ''}ChargePayment (Outbox 로 명령 발행, 결과는 비동기)`);
     ev(o, 'PaymentRequested', `결제 요청 · 카드 ${won(a.card)}${a.coupon ? ` · 쿠폰 ${won(a.coupon)}` : ''}${a.points ? ` · 포인트 ${a.points.toLocaleString()}P` : ''}`);
     o.pay = { card: a.card, points: a.points, coupon: a.coupon };
     if (a.points) { st.points -= a.points; st.pointLog.unshift({ t: st.now, amt: -a.points, memo: `#${o.no} 주문 결제` }); }
@@ -601,6 +629,7 @@ footer a { color: inherit; }
   function retryPay(o) {
     if (!o || o.status !== 'PAYING') return;
     o.retries++;
+    api('POST', `/orders/${oid(o)}/payment`, 202, { cardToken: 'tok_timeout' }, { status: 'PAYING' }, '같은 주문의 결제 재요청 → 진행 중인 Saga 로 응답 (새 결제 없음)');
     ev(o, 'PaymentRequested', '결제 재요청 → 진행 중인 결제로 응답 (새 결제 없음)');
     st.toast = { text: '이미 결제를 확인하고 있어요. 두 번 결제되지 않아요.', id: o.id };
   }
@@ -608,6 +637,7 @@ footer a { color: inherit; }
   function cancelMine(o) {
     if (!o || o.status !== 'PAID' || st.now >= firstSlot(o)) return;
     o.status = 'CANCELLED';
+    api('POST', `/orders/${oid(o)}/cancellation`, 200, {}, { status: 'CANCELLED', cancelReason: 'CUSTOMER_CANCELLED' }, `RefundPayment · ReverseRedemption 명령 발행 (현재 매장 ${STORES[o.store].name} 기준)`);
     if (o.transfer && o.transfer.status === 'AWAITING') { o.transfer.status = 'ABORTED'; o.transfer.hold.status = 'RELEASED'; }
     if (st.toast && st.toast.id === o.id) st.toast = null;
     restoreBenefits(o, '주문 취소 환불');
@@ -617,9 +647,9 @@ footer a { color: inherit; }
   function pickupMine(o) {
     if (!o || o.status !== 'READY') return;
     o.status = 'PICKED_UP'; o.pickedAt = st.now;
-    const earn = Math.floor((o.pay.card * 0.05) / 10) * 10;
+    const earn = Math.floor((o.pay.card * 0.03) / 10) * 10; // 브랜드 적립률 3% (서버 brand_point_policy 와 같음)
     ev(o, 'OrderPickedUp', '픽업 완료');
-    if (earn) { st.points += earn; st.pointLog.unshift({ t: st.now, amt: earn, memo: `#${o.no} 적립 (카드 결제액 5%)` }); ev(o, 'PointsEarned', `포인트 ${earn}P 적립 (카드 결제액 기준)`); }
+    if (earn) { st.points += earn; st.pointLog.unshift({ t: st.now, amt: earn, memo: `#${o.no} 적립 (카드 결제액 3%)` }); ev(o, 'PointsEarned', `포인트 ${earn}P 적립 (카드 결제액 기준)`); }
     if (st.toast && st.toast.id === o.id) st.toast = null;
     addLog(`#${o.no} 픽업 완료`);
   }
@@ -671,6 +701,9 @@ footer a { color: inherit; }
       deadline: st.now + TRANSFER_DEADLINE, replyAt: st.now + (reply === 'auto' ? 0 : reply === 'accept' ? 20 : reply === 'refuse' ? 15 : Infinity),
     };
     ev(o, 'TransferRequested', `매장 변경 요청 · 서울숲점 ${hhmm(pickup)} 먼저 예약 (성수역점 주문은 그대로 유지)`);
+    api('POST', `/orders/${oid(o)}/transfers`, reply === 'auto' ? 200 : 202, { 'Idempotency-Key': key(), toStoreId: 104, pickupAt: hhmm(pickup) },
+      { transferId: o.transfer.id, status: reply === 'auto' ? 'COMPLETED' : 'AWAITING_STORE', deadlineAt: hhmm(o.transfer.deadline) },
+      reply === 'auto' ? '자동 수락 매장 → 자리를 잡은 같은 트랜잭션에서 바로 이동' : '새 매장 자리 HELD, 직원 수락 대기 (2분 기한)');
     addLog(`#${o.no} 고객이 서울숲점으로 매장 변경 요청 — 수락 전까지 이 매장 주문 유지`);
     st.xferOpen = null; st.xferPick = null;
     // 자동 수락 매장: 자리를 잡은 그 자리에서 바로 옮긴다 (서버: 같은 트랜잭션, 응답 200 COMPLETED)
@@ -680,6 +713,7 @@ footer a { color: inherit; }
   function retryTransfer(o) {
     if (!o.transfer || o.transfer.status !== 'AWAITING') return;
     o.transfer.retries++;
+    api('POST', `/orders/${oid(o)}/transfers`, 200, { 'Idempotency-Key': '(처음과 같은 키)' }, { transferId: o.transfer.id, status: 'AWAITING_STORE' }, 'Idempotent-Replayed: true → 새 요청 없음');
     ev(o, 'TransferRequested', '매장 변경 재요청 → 진행 중인 같은 요청으로 응답 (새 요청 없음)');
     st.toast = { text: '이미 서울숲점에 요청했어요. 두 번 옮겨지지 않아요.', id: o.id };
   }
@@ -866,7 +900,7 @@ footer a { color: inherit; }
         : `<div class="empty">아직 주문이 없어요.<br><br><button class="secondary" data-go="menu" style="width:auto">메뉴 보러 가기</button></div>`;
     } else if (r === 'me') {
       h = `<div><h2>내 정보</h2><div class="sub">김브루 님</div></div>`;
-      b += `<div class="mebox"><div style="font-size:13px;opacity:.85">사용 가능한 포인트</div><div class="p num">${st.points.toLocaleString()}P</div><div style="font-size:12px;opacity:.85">음료를 받으면 카드 결제액의 5%를 적립해 드려요</div></div>`;
+      b += `<div class="mebox"><div style="font-size:13px;opacity:.85">사용 가능한 포인트</div><div class="p num">${st.points.toLocaleString()}P</div><div style="font-size:12px;opacity:.85">음료를 받으면 카드 결제액의 3%를 적립해 드려요</div></div>`;
       const c = st.coupon;
       b += `<div class="section-h">쿠폰함</div>${c ? `<div class="kv"><span>🎟️ ${CAMPAIGN.name} ${won(c.discount)} <span class="m">· ${won(c.min)} 이상</span></span><span class="pill ${c.status === 'ISSUED' ? 'good' : ''}">${c.status === 'ISSUED' ? '사용 가능' : `#${c.orderNo} 주문에 사용`}</span></div>` : `<div class="kv"><span class="m">받은 쿠폰이 없어요</span></div>`}`;
       b += `<div class="section-h">포인트 내역</div>${st.pointLog.map((p) => `<div class="kv"><span><span class="m num">${hhmm(p.t)}</span> ${p.memo}</span><span class="num" style="color:${p.amt > 0 ? 'var(--good)' : 'var(--ink)'};font-weight:700">${p.amt > 0 ? '+' : ''}${p.amt.toLocaleString()}P</span></div>`).join('')}`;
@@ -900,7 +934,7 @@ footer a { color: inherit; }
     else if (d.near) { st.pickSel = Number(d.near); st.conflict = null; placeMine('near'); }
     else if (d.xpick) st.xferPick = Number(d.xpick);
     else if (d.reply) st.nearReply = d.reply;
-    else if (d.act === 'xferOpen') { st.xferOpen = d.id; st.xferPick = null; }
+    else if (d.act === 'xferOpen') { st.xferOpen = d.id; st.xferPick = null; const o = st.orders.find((x) => x.id === d.id); api('GET', `/orders/${oid(o)}/transfer-options`, 200, {}, { candidates: [{ storeName: '서울숲점', walkMinutes: STORES.near.walkMin, compatible: !notSoldAt('near', o.items).length, instant: true }] }, '도보 15분 이내 · 같은 이름 · 같은 가격 메뉴만, 가까운 순'); }
     else if (d.act === 'xferClose') st.xferOpen = null;
     else if (d.act === 'xferGo') requestTransfer(st.orders.find((o) => o.id === d.id), st.xferPick);
     else if (d.act === 'xferRetry') retryTransfer(st.orders.find((o) => o.id === d.id));
@@ -1020,15 +1054,89 @@ footer a { color: inherit; }
   });
 
   // ───────────────────────── 시계 · 루프 ─────────────────────────
-  /** 개발자 보기: 내 주문들이 서버에서 어떤 이벤트로 흘러가는지 (서버의 order.events · payment · loyalty 이벤트 이름과 같다) */
+  // ───────────────────────── 개발자 보기: 백엔드에서 실제로 일어나는 일 ─────────────────────────
+  const GH = 'https://github.com/sokldjs554/brewslot/blob/main/services/';
+  const EVENT_META = {
+    OrderPlaced: ['order.events', 'order-service', '조회 모델(CQRS)', 'order-service/src/main/kotlin/com/brewslot/order/ordering/application/PlaceOrderService.kt'],
+    PaymentRequested: ['payment.commands · loyalty.commands', 'order-service (Saga)', 'payment · loyalty', 'order-service/src/main/kotlin/com/brewslot/order/ordering/saga/CheckoutSagaOrchestrator.kt'],
+    PointsRedeemed: ['loyalty.events', 'loyalty-service', 'order Saga · settlement', 'loyalty-service/src/main/kotlin/com/brewslot/loyalty/application/PointService.kt'],
+    PaymentCaptured: ['payment.events', 'payment-service', 'order Saga · settlement', 'payment-service/src/main/kotlin/com/brewslot/payment/application/PaymentService.kt'],
+    PaymentFailed: ['payment.events', 'payment-service', 'order Saga', 'payment-service/src/main/kotlin/com/brewslot/payment/application/PaymentService.kt'],
+    PaymentUnknown: ['(payment-service 내부)', 'payment-service', 'PG 결과 재조회 잡', 'payment-service/src/main/kotlin/com/brewslot/payment/application/PaymentService.kt'],
+    PointsRedemptionReversed: ['loyalty.events', 'loyalty-service', 'settlement', 'loyalty-service/src/main/kotlin/com/brewslot/loyalty/application/PointService.kt'],
+    OrderPaid: ['order.events', 'order-service', '알림(SSE) · 조회 모델', 'order-service/src/main/kotlin/com/brewslot/order/ordering/saga/CheckoutSagaOrchestrator.kt'],
+    OrderCancelled: ['order.events', 'order-service', '알림 · 조회 모델', 'order-service/src/main/kotlin/com/brewslot/order/ordering/application/OrderLifecycleService.kt'],
+    OrderReady: ['order.events', 'order-service', '알림(SSE) · 조회 모델', 'order-service/src/main/kotlin/com/brewslot/order/ordering/application/OrderLifecycleService.kt'],
+    OrderPickedUp: ['order.events', 'order-service', 'loyalty(적립) · 조회 모델', 'order-service/src/main/kotlin/com/brewslot/order/ordering/application/OrderLifecycleService.kt'],
+    PointsEarned: ['(loyalty-service 내부)', 'loyalty-service', '복식부기 원장', 'loyalty-service/src/main/kotlin/com/brewslot/loyalty/application/PointService.kt'],
+    PickupAtRisk: ['order.events', 'order-service (지연 감지 잡)', '알림(SSE)', 'order-service/src/main/kotlin/com/brewslot/order/ordering/application/PickupRiskDetector.kt'],
+    TransferRequested: ['(HTTP · store_transfer 테이블)', 'order-service', '새 매장 슬롯 HELD', 'order-service/src/main/kotlin/com/brewslot/order/ordering/application/StoreTransferService.kt'],
+    OrderTransferred: ['order.events', 'order-service', 'settlement · loyalty · 알림', 'order-service/src/main/kotlin/com/brewslot/order/ordering/application/StoreTransferService.kt'],
+    OrderTransferFailed: ['order.events', 'order-service', '알림(SSE)', 'order-service/src/main/kotlin/com/brewslot/order/ordering/application/StoreTransferService.kt'],
+  };
+  const DEV_TABS = [['events', '이벤트'], ['api', 'API'], ['slots', '제조 슬롯'], ['money', '돈의 흐름']];
+  const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const jsonLine = (o) => esc(JSON.stringify(o));
+  const latestMine = () => st.orders.filter((o) => o.mine && o.pay).slice(-1)[0] || st.orders.filter((o) => o.mine).slice(-1)[0];
+
+  function devEvents() {
+    const evs = st.orders.filter((o) => o.mine).flatMap((o) => o.events.map((e) => ({ ...e, no: o.no }))).sort((a, b) => b.t - a.t).slice(0, 40);
+    if (!evs.length) return `<div class="empty2">주문 · 결제하면 <code>OrderPlaced</code> → <code>PaymentRequested</code> → <code>PaymentCaptured</code> → <code>OrderPaid</code> 가 쌓여요. 매장 화면에서 '바리스타 자동 처리'를 끄면 <code>PickupAtRisk</code> → <code>OrderTransferred</code> 도 볼 수 있어요.</div>`;
+    return `<ul>${evs.map((e) => { const m = EVENT_META[e.code] || ['', '', '', '']; return `<li><span class="t num">${hhmmss(e.t)}</span><b>#${e.no}</b> <code>${e.code}</code>${e.text}
+      <div class="meta">${m[0] ? `<span class="topic">${m[0]}</span> ${m[1]} → ${m[2]}` : ''}${m[3] ? ` · <a href="${GH}${m[3]}" target="_blank" rel="noopener">코드</a>` : ''}</div></li>`; }).join('')}</ul>`;
+  }
+  function devApi() {
+    if (!st.api.length) return `<div class="empty2">고객 앱에서 누르는 버튼마다 서버로 가는 요청이 여기 찍혀요. 주문 생성 · 결제 · 매장 변경 요청에는 <code>Idempotency-Key</code> 가 붙어 두 번 눌러도 한 번만 처리돼요.</div>`;
+    return `<ul>${st.api.map((a) => `<li><span class="t num">${hhmmss(a.t)}</span><b class="m-${a.method}">${a.method}</b> ${esc(a.path)} <span class="st s${String(a.status)[0]}">${a.status}</span>
+      <div class="meta">${esc(a.note)}</div><pre>→ ${jsonLine(a.req)}\n← ${jsonLine(a.res)}</pre></li>`).join('')}</ul>`;
+  }
+  function devSlots() {
+    const o = latestMine();
+    if (!o || !o.tickets) return `<div class="empty2">주문하면 픽업 시각에서 거꾸로(신선도 창 안에서 가장 늦은 슬롯부터) 어느 스테이션 · 몇 시 슬롯에 만들지 여기 보여요.</div>`;
+    const u = usage(o.store);
+    const rows = o.tickets.map((tk) => { const x = u.stateOf(tk.station, tk.slot); return `<tr><td>${STATION[tk.station].name}</td><td class="num">${hhmm(tk.slot)}~${hhmm(tk.slot + SLOT)}</td><td class="num">${tk.units}</td><td class="num">${x.reserved}/${x.capacity}</td><td>${tk.lines.map((l) => byId[l.menuId].name + (l.qty > 1 ? '×' + l.qty : '')).join(', ')}</td></tr>`; }).join('');
+    const fresh = o.items.map((l) => `${byId[l.menuId].name} ${byId[l.menuId].fresh}분`).join(' · ');
+    return `<div class="dev-note">#${o.no} · ${STORES[o.store].name} · 픽업 <b>${hhmm(o.pickup)}</b> · 신선도 창: ${fresh}<br>음료가 식지 않도록 픽업 직전 슬롯부터 거꾸로 채워요. 칸이 가득 차면 409 + 가까운 시각 3개.</div>
+      <table class="dev-tbl"><thead><tr><th>스테이션</th><th>제조 슬롯</th><th>부하</th><th>슬롯 사용</th><th>음료</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="dev-note">DB: <code>slot_capacity (reserved ≤ capacity CHECK)</code> 행을 <code>ORDER BY station, slot_start FOR UPDATE</code> 로 잠가 동시 주문에도 초과 예약 0 · <a href="${GH}order-service/src/main/kotlin/com/brewslot/order/scheduling/domain/BrewScheduler.kt" target="_blank" rel="noopener">스케줄러 코드</a></div>`;
+  }
+  function devMoney() {
+    const o = st.orders.filter((x) => x.mine && x.pay && x.paidAt).slice(-1)[0];
+    if (!o) return `<div class="empty2">결제하면 쿠폰 · 포인트 · 카드가 복식부기 원장과 정산 원천 행으로 어떻게 기록되는지 여기 보여요.</div>`;
+    const from = STORES.main.name, cur = STORES[o.store].name, fee = (n) => Math.round(n * 0.022);
+    const led = []; const stl = [];
+    if (o.pay.coupon) { led.push(['쿠폰 사용', 'brand:1:promotion', `store:${from}:clearing`, o.pay.coupon]); stl.push(['COUPON_SALE', from, o.pay.coupon, 0]); }
+    if (o.pay.points) { led.push(['포인트 사용', 'member:1:brand:1', `store:${from}:clearing`, o.pay.points]); stl.push(['POINT_SALE', from, o.pay.points, 0]); }
+    if (o.pay.card) stl.push(['CARD_SALE', from, o.pay.card, fee(o.pay.card)]);
+    if (o.movedFrom) {
+      if (o.pay.coupon + o.pay.points) led.push(['매장 변경', `store:${from}:clearing`, `store:${cur}:clearing`, o.pay.coupon + o.pay.points]);
+      stl.push(['TRANSFER_OUT', from, -o.total, -fee(o.pay.card)]); stl.push(['TRANSFER_IN', cur, o.total, fee(o.pay.card)]);
+    }
+    if (o.status === 'CANCELLED') {
+      if (o.pay.points) led.push(['사용 취소', `store:${cur}:clearing`, 'member:1:brand:1', o.pay.points]);
+      if (o.pay.coupon) led.push(['쿠폰 복원', `store:${cur}:clearing`, 'brand:1:promotion', o.pay.coupon]);
+      if (o.pay.card) stl.push(['CARD_REFUND', cur, -o.pay.card, -fee(o.pay.card)]);
+      if (o.pay.points) stl.push(['POINT_REVERSAL', cur, -o.pay.points, 0]);
+      if (o.pay.coupon) stl.push(['COUPON_REVERSAL', cur, -o.pay.coupon, 0]);
+    }
+    const earn = o.status === 'PICKED_UP' ? Math.floor((o.pay.card * 0.03) / 10) * 10 : 0;
+    if (earn) led.push(['적립 3%', 'brand:1:funding', 'member:1:brand:1', earn]);
+    const byStore = {}; stl.forEach(([, st2, amt, f]) => { byStore[st2] = byStore[st2] || [0, 0]; byStore[st2][0] += amt; byStore[st2][1] += f; });
+    return `<div class="dev-note">#${o.no} · 총액 ${won(o.total)} = 쿠폰 ${won(o.pay.coupon)} + 포인트 ${won(o.pay.points)} + 카드 ${won(o.pay.card)}${o.movedFrom ? ` · ${from} → ${cur} 매장 변경` : ''}${o.status === 'CANCELLED' ? ' · 취소됨' : ''}</div>
+      <div class="dev-h">포인트 원장 (loyalty-service · 차변 = 대변을 DB 트리거가 강제)</div>
+      <table class="dev-tbl"><thead><tr><th>거래</th><th>차변</th><th>대변</th><th class="r">금액</th></tr></thead><tbody>${led.map((r) => `<tr><td>${r[0]}</td><td><code>${r[1]}</code></td><td><code>${r[2]}</code></td><td class="r num">${r[3].toLocaleString()}</td></tr>`).join('') || '<tr><td colspan="4">쿠폰 · 포인트 사용 없음</td></tr>'}</tbody></table>
+      <div class="dev-h">정산 원천 행 (settlement-service · 이벤트 ID 유니크로 멱등)</div>
+      <table class="dev-tbl"><thead><tr><th>kind</th><th>매장</th><th class="r">금액</th><th class="r">PG 수수료</th></tr></thead><tbody>${stl.map((r) => `<tr><td><code>${r[0]}</code></td><td>${r[1]}</td><td class="r num">${r[2].toLocaleString()}</td><td class="r num">${r[3].toLocaleString()}</td></tr>`).join('')}</tbody></table>
+      <div class="dev-note">매장별 합계: ${Object.entries(byStore).map(([k, v]) => `<b>${k}</b> 매출 ${won(v[0])} · 수수료 ${won(v[1])}`).join(' / ')}</div>`;
+  }
   function renderDev() {
     const el = $('devPanel');
     el.hidden = !st.showCodes;
     if (!st.showCodes) return;
-    const evs = st.orders.filter((o) => o.mine).flatMap((o) => o.events.map((e) => ({ ...e, no: o.no }))).sort((a, b) => b.t - a.t).slice(0, 40);
-    el.innerHTML = `<div class="dh"><b>서버 이벤트 흐름</b><small>내 주문 기준 · 최신순 · Kafka 이벤트 이름</small><button data-dev-close aria-label="닫기">✕</button></div>`
-      + (evs.length ? `<ul>${evs.map((e) => `<li><span class="t num">${hhmmss(e.t)}</span><b>#${e.no}</b> <code>${e.code}</code>${e.text}</li>`).join('')}</ul>`
-        : `<div class="empty2">아직 주문이 없어요. 고객 앱에서 주문 · 결제하면 <code>OrderPlaced</code> → <code>PaymentRequested</code> → <code>PaymentCaptured</code> → <code>OrderPaid</code> 순서로 여기에 쌓여요.<br>매장 화면에서 '바리스타 자동 처리'를 끄면 <code>PickupAtRisk</code> → <code>OrderTransferred</code> 흐름도 볼 수 있어요.</div>`);
+    const keep = el.querySelector('.dbody') ? el.querySelector('.dbody').scrollTop : 0;
+    const body = { events: devEvents, api: devApi, slots: devSlots, money: devMoney }[st.devTab]();
+    el.innerHTML = `<div class="dh"><b>개발자 보기</b><div class="dtabs">${DEV_TABS.map(([k, n]) => `<button data-dev-tab="${k}" aria-pressed="${st.devTab === k}">${n}</button>`).join('')}</div><button data-dev-close aria-label="닫기">✕</button></div><div class="dbody">${body}</div>`;
+    el.querySelector('.dbody').scrollTop = keep;
   }
   function renderAll() { renderPhone(); renderStore(); renderDev(); dirty = false; updateLive(); }
   function updateLive() {
@@ -1053,7 +1161,10 @@ footer a { color: inherit; }
   $('btnReset').addEventListener('click', () => { reset(); renderAll(); });
   const setDev = (on) => { st.showCodes = on; $('btnCodes').setAttribute('aria-pressed', String(on)); renderAll(); };
   $('btnCodes').addEventListener('click', () => setDev(!st.showCodes));
-  $('devPanel').addEventListener('click', (e) => { if (e.target.closest('[data-dev-close]')) setDev(false); });
+  $('devPanel').addEventListener('click', (e) => {
+    if (e.target.closest('[data-dev-close]')) setDev(false);
+    const t = e.target.closest('[data-dev-tab]'); if (t) { st.devTab = t.dataset.devTab; renderDev(); }
+  });
   document.querySelectorAll('.switch-view button').forEach((b) => b.addEventListener('click', () => {
     document.body.dataset.view = b.dataset.view;
     document.querySelectorAll('.switch-view button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
