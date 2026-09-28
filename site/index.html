@@ -258,12 +258,7 @@ footer a { color: inherit; }
   <div class="clock">
     <span class="lbl">매장 시각</span>
     <span class="time num" id="clock">08:30:00</span>
-    <div class="ctl" role="group" aria-label="시간 흐름">
-      <button id="btnPlay" aria-pressed="true" aria-label="일시정지">⏸</button>
-      <button data-speed="1" aria-pressed="false">1배</button>
-      <button data-speed="10" aria-pressed="true">10배</button>
-      <button data-speed="60" aria-pressed="false">60배</button>
-    </div>
+    <button class="ghost" id="btnPlay" aria-pressed="false" aria-label="일시정지">⏸ 멈춤</button>
     <button class="ghost" id="btnSkip">+5분</button>
     <button class="ghost" id="btnReset">처음부터</button>
   </div>
@@ -850,12 +845,10 @@ footer a { color: inherit; }
   }
 
   function setSpeedUi() {
-    $('btnPlay').textContent = st.playing ? '⏸' : '▶'; $('btnPlay').setAttribute('aria-pressed', String(!st.playing));
+    $('btnPlay').textContent = st.playing ? '⏸ 멈춤' : '▶ 계속'; $('btnPlay').setAttribute('aria-pressed', String(!st.playing));
     $('btnPlay').setAttribute('aria-label', st.playing ? '일시정지' : '재생');
-    document.querySelectorAll('[data-speed]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === st.speed)));
   }
   $('btnPlay').addEventListener('click', () => { st.playing = !st.playing; setSpeedUi(); });
-  document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => { st.speed = Number(b.dataset.speed); st.playing = true; setSpeedUi(); }));
   $('btnSkip').addEventListener('click', () => { advance(300); renderAll(); });
   $('btnReset').addEventListener('click', () => { reset(); renderAll(); });
   document.querySelectorAll('.switch-view button').forEach((b) => b.addEventListener('click', () => {
