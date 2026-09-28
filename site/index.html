@@ -52,6 +52,18 @@ button:disabled { cursor: not-allowed; }
 .ctl button { border: 0; background: transparent; padding: 5px 10px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--ink2); }
 .ctl button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
 .ghost { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 6px 12px; font-size: 13px; font-weight: 600; }
+#btnCodes[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.devpanel { position: fixed; right: 16px; bottom: 16px; z-index: 30; width: min(460px, calc(100vw - 32px)); max-height: 46vh; display: flex; flex-direction: column;
+  background: #1b1815; color: #efe9e2; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.35); font-size: 12.5px; }
+.devpanel[hidden] { display: none; }
+.devpanel .dh { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #3a342e; }
+.devpanel .dh b { font-size: 13px; } .devpanel .dh small { color: #a79e95; flex: 1; }
+.devpanel .dh button { background: none; border: 0; color: #cfc6bc; font-size: 16px; }
+.devpanel ul { list-style: none; margin: 0; padding: 6px 14px 10px; overflow: auto; }
+.devpanel li { padding: 6px 0; border-bottom: 1px dashed #3a342e; line-height: 1.45; }
+.devpanel li .t { color: #a79e95; margin-right: 6px; }
+.devpanel li code { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; background: #3b2f25; color: #f2c9a0; font-size: 11.5px; }
+.devpanel .empty2 { padding: 14px; color: #bdb4aa; line-height: 1.6; }
 .switch-view { display: none; }
 
 /* ── layout ── */
@@ -301,6 +313,7 @@ footer a { color: inherit; }
     </div>
   </section>
 </main>
+<aside class="devpanel" id="devPanel" hidden aria-label="서버 이벤트 흐름"></aside>
 <footer>데모 화면입니다. 주문 · 결제 · 다른 손님은 모두 브라우저 안에서 가상으로 만들어지며 실제 결제는 일어나지 않습니다. · <a href="https://github.com/sokldjs554/brewslot">GitHub</a></footer>
 
 <script src="scheduler.js"></script>
@@ -842,7 +855,7 @@ footer a { color: inherit; }
       const evs = o.events.slice();
       if (o.status !== 'CANCELLED' && o.paidAt && st.now >= fs) evs.push({ t: fs, code: 'OrderPreparing', text: '제조 시작 (픽업 시각에 맞춰 역산한 슬롯)' });
       evs.sort((x, y) => x.t - y.t);
-      b += `<details style="margin-top:14px"><summary class="section-h" style="cursor:pointer;margin:0">주문 기록 <small>${evs.length}건</small></summary><ul class="evts" style="margin-top:8px">${evs.map((e) => `<li><span class="t num">${hhmmss(e.t)}</span>${e.text}${st.showCodes ? `<code>${e.code}</code>` : ''}</li>`).join('')}</ul></details>`;
+      b += `<details style="margin-top:14px"${st.showCodes ? ' open' : ''}><summary class="section-h" style="cursor:pointer;margin:0">주문 기록 <small>${evs.length}건</small></summary><ul class="evts" style="margin-top:8px">${evs.map((e) => `<li><span class="t num">${hhmmss(e.t)}</span>${e.text}${st.showCodes ? `<code>${e.code}</code>` : ''}</li>`).join('')}</ul></details>`;
       if (stg === 'READY') b += `<div class="cartbar"><button class="primary" data-act="pickup" data-id="${o.id}"><span>음료를 받았어요</span><span>✓</span></button></div>`;
       else if (stg === 'WAIT') b += `${transferable(o) && st.xferOpen !== o.id ? `<button class="secondary" data-act="xferOpen" data-id="${o.id}" style="margin-top:16px">📍 픽업 매장 바꾸기 · 결제는 그대로</button>` : ''}<button class="secondary" data-act="cancel" data-id="${o.id}" style="margin-top:8px">주문 취소 · 만들기 시작 전까지 가능</button>`;
       else if (stg === 'PICKED_UP' || stg === 'CANCELLED') b += `<button class="secondary" data-act="reorder" data-id="${o.id}" style="margin-top:16px">같은 메뉴 다시 주문하기</button>`;
@@ -1007,7 +1020,17 @@ footer a { color: inherit; }
   });
 
   // ───────────────────────── 시계 · 루프 ─────────────────────────
-  function renderAll() { renderPhone(); renderStore(); dirty = false; updateLive(); }
+  /** 개발자 보기: 내 주문들이 서버에서 어떤 이벤트로 흘러가는지 (서버의 order.events · payment · loyalty 이벤트 이름과 같다) */
+  function renderDev() {
+    const el = $('devPanel');
+    el.hidden = !st.showCodes;
+    if (!st.showCodes) return;
+    const evs = st.orders.filter((o) => o.mine).flatMap((o) => o.events.map((e) => ({ ...e, no: o.no }))).sort((a, b) => b.t - a.t).slice(0, 40);
+    el.innerHTML = `<div class="dh"><b>서버 이벤트 흐름</b><small>내 주문 기준 · 최신순 · Kafka 이벤트 이름</small><button data-dev-close aria-label="닫기">✕</button></div>`
+      + (evs.length ? `<ul>${evs.map((e) => `<li><span class="t num">${hhmmss(e.t)}</span><b>#${e.no}</b> <code>${e.code}</code>${e.text}</li>`).join('')}</ul>`
+        : `<div class="empty2">아직 주문이 없어요. 고객 앱에서 주문 · 결제하면 <code>OrderPlaced</code> → <code>PaymentRequested</code> → <code>PaymentCaptured</code> → <code>OrderPaid</code> 순서로 여기에 쌓여요.<br>매장 화면에서 '바리스타 자동 처리'를 끄면 <code>PickupAtRisk</code> → <code>OrderTransferred</code> 흐름도 볼 수 있어요.</div>`);
+  }
+  function renderAll() { renderPhone(); renderStore(); renderDev(); dirty = false; updateLive(); }
   function updateLive() {
     $('clock').textContent = hhmmss(st.now); $('phClock').textContent = hhmm(st.now);
     document.querySelectorAll('[data-until]').forEach((el) => { const s = Number(el.dataset.until) - st.now; el.textContent = s > 60 ? Math.ceil(s / 60) + '분' : Math.max(0, Math.ceil(s)) + '초'; });
@@ -1028,14 +1051,17 @@ footer a { color: inherit; }
   $('btnPlay').addEventListener('click', () => { st.playing = !st.playing; setSpeedUi(); });
   $('btnSkip').addEventListener('click', () => { advance(300); renderAll(); });
   $('btnReset').addEventListener('click', () => { reset(); renderAll(); });
-  $('btnCodes').addEventListener('click', () => { st.showCodes = !st.showCodes; $('btnCodes').setAttribute('aria-pressed', String(st.showCodes)); renderAll(); });
+  const setDev = (on) => { st.showCodes = on; $('btnCodes').setAttribute('aria-pressed', String(on)); renderAll(); };
+  $('btnCodes').addEventListener('click', () => setDev(!st.showCodes));
+  $('devPanel').addEventListener('click', (e) => { if (e.target.closest('[data-dev-close]')) setDev(false); });
   document.querySelectorAll('.switch-view button').forEach((b) => b.addEventListener('click', () => {
     document.body.dataset.view = b.dataset.view;
     document.querySelectorAll('.switch-view button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   }));
 
   function reset() {
-    st = freshState();
+    const dev = st ? st.showCodes : false;
+    st = freshState(); st.showCodes = dev;
     advance(T(8, 30) - st.now); // 문 연 지 조금 지난 매장에서 시작
     st.log = st.log.slice(0, 12);
     setSpeedUi(); dirty = true;
