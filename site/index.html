@@ -649,7 +649,7 @@ footer a { color: inherit; }
       const prev = o.pickup;
       o.movedFrom = 'main'; o.store = 'near'; o.pickup = x.pickup; o.tickets = x.hold.tickets; x.hold.status = 'MOVED'; x.status = 'COMPLETED';
       st.now = x.replyAt;
-      ev(o, 'OrderTransferred', `서울숲점 수락 → 한 번에 옮김 · 성수역점 자리 해제 · 픽업 ${hhmm(prev)} → ${hhmm(o.pickup)} (결제 · 쿠폰 · 포인트 그대로)`);
+      ev(o, 'OrderTransferred', `서울숲점 수락 → 한 번에 옮김 · 성수역점 자리 해제 · 픽업 ${prev === o.pickup ? hhmm(prev) + ' 그대로' : hhmm(prev) + ' → ' + hhmm(o.pickup)} (결제 · 쿠폰 · 포인트 그대로)`);
       st.now = t;
       st.toast = { text: `#${o.no} 서울숲점으로 옮겨졌어요. ${hhmm(o.pickup)}에 서울숲점에서 받아가세요.`, id: o.id };
       addLog(`#${o.no} 서울숲점으로 매장 변경 완료 → 이 매장 제조 자리 반환, 매출은 서울숲점 정산으로`);
