@@ -4,7 +4,17 @@ import com.fasterxml.jackson.databind.JsonNode
 import java.time.Duration
 import java.time.Instant
 
-/** 고객 앱에 보내는 알림 한 건. SSE 의 id 는 재연결(Last-Event-ID) 때 이어 받기 위한 커서다. */
+/**
+ * 알림이 고객을 부르는 방식.
+ * - [ALERT]: 소리·진동으로 알린다. 고객이 지금 움직이거나 결정해야 할 때만 쓴다.
+ * - [QUIET]: 울리지 않고, 같은 주문 카드의 상태만 바꾼다.
+ */
+enum class Delivery { ALERT, QUIET }
+
+/**
+ * 고객 앱에 보내는 알림 한 건. SSE 의 id 는 재연결(Last-Event-ID) 때 이어 받기 위한 커서다.
+ * [collapseKey] 가 같은 알림은 앱이 하나로 합쳐 마지막 것만 보여 준다(주문 하나 = 알림 카드 하나).
+ */
 data class Notification(
     val id: String,
     val memberId: Long,
@@ -13,6 +23,8 @@ data class Notification(
     val title: String,
     val body: String,
     val occurredAt: Instant,
+    val delivery: Delivery = Delivery.ALERT,
+    val collapseKey: String = "order:$orderId",
 ) {
     /** Last-Event-ID 커서보다 뒤의 알림인가. 커서 = "<발생 시각 ms>:<이벤트 ID>" (인스턴스가 달라도 비교 가능) */
     fun isAfter(cursor: String?): Boolean {
@@ -26,8 +38,17 @@ data class Notification(
 /**
  * 주문 도메인 이벤트(order.events) → 고객이 알아야 할 알림. 알림이 필요 없는 이벤트는 null.
  * 문구는 "고객이 무엇을 하면 되는지" 기준으로 쓴다.
+ *
+ * 커피 한 잔에 알림이 여러 번 울리지 않도록, 정상 흐름(결제 확정 → 제조 시작 → 준비 완료 → 픽업)에서 울리는 것은
+ * 준비 완료 하나뿐이다. 나머지는 [Delivery.QUIET] 로 같은 주문 카드만 갱신한다.
+ * 취소·지연·매장 변경처럼 고객이 따로 알아야 하는 일은 흐름 중간이라도 울린다.
  */
 object NotificationMapper {
+    /** 울리지 않는 이벤트. 고객이 이미 화면에서 본 일(결제)이거나, 기다리기만 하면 되는 일이다. */
+    private val QUIET_EVENTS = setOf("OrderPaid", "OrderPreparing", "OrderPickedUp")
+
+    fun deliveryOf(eventType: String): Delivery = if (eventType in QUIET_EVENTS) Delivery.QUIET else Delivery.ALERT
+
     fun from(eventId: String, eventType: String, occurredAt: Instant, p: JsonNode): Notification? {
         val memberId = p.path("memberId").asLong(0)
         if (memberId == 0L) return null
@@ -46,7 +67,10 @@ object NotificationMapper {
             "PickupAtRisk" -> "${p.path("storeName").asText()}이 약 ${p.path("expectedDelayMinutes").asInt()}분 늦어지고 있어요" to riskBody(p)
             else -> return null
         }
-        return Notification("${occurredAt.toEpochMilli()}:$eventId", memberId, orderId, eventType, title, body, occurredAt)
+        return Notification(
+            "${occurredAt.toEpochMilli()}:$eventId", memberId, orderId, eventType, title, body, occurredAt,
+            delivery = deliveryOf(eventType),
+        )
     }
 
     private fun readyBody(pickup: Instant?, readyAt: Instant?): String {

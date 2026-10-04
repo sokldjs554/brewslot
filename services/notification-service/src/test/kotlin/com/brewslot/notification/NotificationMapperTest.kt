@@ -71,6 +71,23 @@ class NotificationMapperTest {
     }
 
     @Test
+    fun `정상 주문 흐름에서 울리는 알림은 준비 완료 하나뿐이고, 모두 같은 주문 카드로 합쳐진다`() {
+        val flow = listOf("OrderPaid", "OrderPreparing", "OrderReady", "OrderPickedUp").mapIndexed { i, type ->
+            NotificationMapper.from("e$i", type, at, payload("orderId" to "o1", "memberId" to 7))!!
+        }
+        assertThat(flow.filter { it.delivery == Delivery.ALERT }.map { it.type }).containsExactly("OrderReady")
+        assertThat(flow.map { it.collapseKey }.distinct()).containsExactly("order:o1")
+    }
+
+    @Test
+    fun `취소 · 지연 · 매장 변경 결과는 흐름 중간이라도 울린다`() {
+        listOf("OrderCancelled", "PickupAtRisk", "OrderTransferred", "OrderTransferFailed").forEach { type ->
+            val n = NotificationMapper.from("e", type, at, payload("orderId" to "o", "memberId" to 1))!!
+            assertThat(n.delivery).describedAs(type).isEqualTo(Delivery.ALERT)
+        }
+    }
+
+    @Test
     fun `알림이 필요 없는 이벤트와 회원을 모르는 이벤트는 무시한다`() {
         assertThat(NotificationMapper.from("e", "OrderPlaced", at, payload("orderId" to "o", "memberId" to 1))).isNull()
         assertThat(NotificationMapper.from("e", "OrderPreparing", at, payload("orderId" to "o"))).isNull() // 구버전 이벤트(memberId 없음)

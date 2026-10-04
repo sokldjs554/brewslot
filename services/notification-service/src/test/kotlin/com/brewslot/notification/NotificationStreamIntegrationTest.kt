@@ -69,6 +69,9 @@ class NotificationStreamIntegrationTest {
         assertThat(received.map { it.event() }).containsExactly("OrderPaid", "OrderReady")
         assertThat(received.last().data()!!.body).contains("3분 먼저")
         assertThat(received.last().id()).isEqualTo(received.last().data()!!.id)
+        // 결제 확정은 울리지 않고 준비 완료만 울린다. 둘 다 같은 주문 카드로 합쳐진다.
+        assertThat(received.map { it.data()!!.delivery }).containsExactly(Delivery.QUIET, Delivery.ALERT)
+        assertThat(received.map { it.data()!!.collapseKey }).containsOnly("order:o-1")
 
         Thread.sleep(500)
         assertThat(other.isDone).isFalse() // 다른 회원에게는 아무것도 가지 않았다
