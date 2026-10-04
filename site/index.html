@@ -143,8 +143,10 @@ button:disabled { cursor: not-allowed; }
 .kv .m { color: var(--muted); }
 .card-opt { display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; background: var(--panel); width: 100%; text-align: left; }
 .card-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
-.card-opt .cc { width: 36px; height: 24px; border-radius: 5px; background: linear-gradient(135deg, #3b3b58, #6b6b8c); flex: none; }
-.card-opt .cc.red { background: linear-gradient(135deg, #7a2d2d, #b35b5b); }
+.card-opt .cc { width: 46px; height: 30px; border-radius: 6px; flex: none; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: -.02em; }
+.card-opt .cc.c-ok { background: linear-gradient(135deg, #4b3f8f, #7a6bd1); }
+.card-opt .cc.c-declined { background: linear-gradient(135deg, #a4492e, #d9805f); }
+.card-opt .cc.c-timeout { background: linear-gradient(135deg, #1b6b73, #3fa3ab); }
 .toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); width: 100%; text-align: left; font-weight: 600; }
 .sw { width: 40px; height: 24px; border-radius: 999px; background: var(--line); position: relative; flex: none; transition: background .15s; }
 .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgb(0 0 0 / .3); }
@@ -371,9 +373,9 @@ footer a { color: inherit; }
   const CATS = [['all', '전체'], ['coffee', '커피'], ['non', '논커피'], ['brew', '핸드드립']];
   const ACTIVE = new Set(['HELD', 'PAYING', 'PAID', 'READY', 'PICKED_UP']);
   const CARDS = [
-    { id: 'ok', name: '국민카드', no: '**** 4821', note: '' },
-    { id: 'declined', name: '신한카드', no: '**** 0917', note: '잔액 부족', red: true },
-    { id: 'timeout', name: '하나카드', no: '**** 3310', note: '카드사 응답 지연' },
+    { id: 'ok', name: '국민카드', short: '국민', no: '**** 4821', note: '' },
+    { id: 'declined', name: '신한카드', short: '신한', no: '**** 0917', note: '잔액 부족' },
+    { id: 'timeout', name: '하나카드', short: '하나', no: '**** 3310', note: '카드사 응답 지연' },
   ];
   const CAMPAIGN = { name: '성수역점 오픈 기념 쿠폰', discount: 1000, min: 5000, limit: 30 };
   // 같은 브랜드 근처 매장. 메뉴 · 가격은 같고 핸드드립은 팔지 않으며, 에스프레소 머신이 커서 용량이 더 크다.
@@ -852,7 +854,7 @@ footer a { color: inherit; }
           b += `<div class="section-h">쿠폰</div><button class="toggle" data-act="coupon" role="switch" aria-checked="${a.couponOk && st.useCoupon}" ${a.couponOk ? '' : 'disabled'}><span>🎟️ ${won(st.coupon.discount)} 할인${a.couponOk ? '' : `<div style="font-size:12px;color:var(--muted)">${won(st.coupon.min)} 이상 주문 시 사용 가능</div>`}</span><span class="sw"></span></button>`;
         }
         b += `<div class="section-h">포인트</div><button class="toggle" data-act="points" role="switch" aria-checked="${st.usePoints}"><span>보유 <b class="num">${st.points.toLocaleString()}P</b> 사용</span><span class="sw"></span></button>`;
-        b += `<div class="section-h">결제 카드</div>${CARDS.map((c) => `<button class="card-opt" data-card="${c.id}" aria-pressed="${st.payCard === c.id}"><span class="cc${c.red ? ' red' : ''}"></span><span><b>${c.name}</b> <span class="num">${c.no}</span>${c.note ? `<div style="font-size:12px;color:var(--muted)">${c.note}</div>` : ''}</span></button>`).join('')}`;
+        b += `<div class="section-h">결제 카드</div>${CARDS.map((c) => `<button class="card-opt" data-card="${c.id}" aria-pressed="${st.payCard === c.id}"><span class="cc c-${c.id}" aria-hidden="true">${c.short}</span><span><b>${c.name}</b> <span class="num">${c.no}</span>${c.note ? `<div style="font-size:12px;color:var(--muted)">${c.note}</div>` : ''}</span></button>`).join('')}`;
         b += `<div style="margin-top:10px"><div class="kv"><span class="m">주문 금액</span><span class="num">${won(o.total)}</span></div>${a.coupon ? `<div class="kv"><span class="m">쿠폰 할인</span><span class="num">−${won(a.coupon)}</span></div>` : ''}<div class="kv"><span class="m">포인트 사용</span><span class="num">−${won(pts)}</span></div><div class="kv total"><span>카드 결제</span><span class="num">${won(a.card)}</span></div></div>`;
         b += `<button class="secondary" data-act="cancelHold" style="margin-top:14px">주문 취소</button>`;
         b += `<div class="cartbar"><button class="primary" data-act="pay"><span>결제하기</span><span class="num">${won(a.card)}</span></button></div>`;
@@ -901,8 +903,11 @@ footer a { color: inherit; }
     } else if (r === 'me') {
       h = `<div><h2>내 정보</h2><div class="sub">김브루 님</div></div>`;
       b += `<div class="mebox"><div style="font-size:13px;opacity:.85">사용 가능한 포인트</div><div class="p num">${st.points.toLocaleString()}P</div><div style="font-size:12px;opacity:.85">음료를 받으면 카드 결제액의 3%를 적립해 드려요</div></div>`;
+      b += `<p class="hint" style="margin:10px 2px">포인트와 쿠폰은 매장이 아니라 <b>브랜드</b>에 쌓여요. 매장이 문을 닫아도 같은 브랜드의 다른 매장에서 그대로 쓸 수 있어요.</p>`;
       const c = st.coupon;
       b += `<div class="section-h">쿠폰함</div>${c ? `<div class="kv"><span>🎟️ ${CAMPAIGN.name} ${won(c.discount)} <span class="m">· ${won(c.min)} 이상</span></span><span class="pill ${c.status === 'ISSUED' ? 'good' : ''}">${c.status === 'ISSUED' ? '사용 가능' : `#${c.orderNo} 주문에 사용`}</span></div>` : `<div class="kv"><span class="m">받은 쿠폰이 없어요</span></div>`}`;
+      b += `<p class="hint" style="margin:8px 2px">쿠폰은 내가 <b>쿠폰 받기</b>를 눌렀을 때만 생겨요. 연락처는 읽지 않고, 지인에게 쿠폰을 보내지 않아요.</p>`;
+      b += `<div class="section-h">알림</div><p class="hint" style="margin:0 2px 8px">정상 주문에서는 음료가 준비됐을 때 한 번만 알려요. 결제 확인이 늦어지거나 지연·취소·매장 변경이 생기면 그때 알려요.</p>`;
       b += `<div class="section-h">포인트 내역</div>${st.pointLog.map((p) => `<div class="kv"><span><span class="m num">${hhmm(p.t)}</span> ${p.memo}</span><span class="num" style="color:${p.amt > 0 ? 'var(--good)' : 'var(--ink)'};font-weight:700">${p.amt > 0 ? '+' : ''}${p.amt.toLocaleString()}P</span></div>`).join('')}`;
     }
     if (st.toast && !(r === 'order' && st.viewOrder === st.toast.id)) b = `<div class="toast" role="status"><span>🔔</span><span>${st.toast.text}</span><button data-open="${st.toast.id}">보기</button></div>` + b;
